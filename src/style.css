@@ -311,11 +311,16 @@ kbd {
   font-size: 13px;
 }
 .cli-cta .cli-label { color: var(--muted); }
-.cli-cta code {
+.cli-cta #cliCmd {
   flex: 1; min-width: 220px;
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   padding: 8px 12px; color: var(--accent); font-family: var(--mono); font-size: 13px;
   user-select: all; overflow-x: auto; white-space: nowrap;
+}
+.cli-cta .cli-run { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.cli-cta .cli-run code {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 2px 7px; color: var(--accent); font-family: var(--mono); font-size: 12px;
 }
 .cli-cta .cli-src { color: var(--muted); text-decoration: none; font-size: 12px; }
 .cli-cta .cli-src:hover { color: var(--accent); }

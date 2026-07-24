@@ -8,8 +8,9 @@ import { initAnalytics } from './firebase/config.js';
 
 // ---------------------------------------------------------------- constants
 const REPO_URL = 'https://github.com/supermario2828/typer';
-// One-liner to run the terminal version (needs Node.js installed).
-const CLI_COMMAND = 'npx --yes github:supermario2828/typer';
+// Install the terminal version globally (needs Node.js). Afterwards the `typer`
+// command is available anywhere on that machine.
+const CLI_COMMAND = 'npm install -g github:supermario2828/typer';
 
 // ---------------------------------------------------------------- app state
 const cfg = loadConfig();
@@ -100,9 +101,10 @@ function renderShell() {
     <section class="history hidden" id="board"></section>
 
     <footer class="cli-cta">
-      <span class="cli-label">▶ prefer the terminal? run the CLI version:</span>
+      <span class="cli-label">▶ install the terminal version:</span>
       <code id="cliCmd">${CLI_COMMAND}</code>
       <button class="btn" id="copyCli">copy</button>
+      <span class="cli-run">then run <code>typer</code></span>
       <a class="cli-src" href="${REPO_URL}" target="_blank" rel="noopener">source ↗</a>
     </footer>
   `;
