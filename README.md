@@ -40,7 +40,7 @@ doesn't fit a CLI, so the terminal is local-only).
 
 ```bash
 # Install once (needs Node.js) — adds a global `typer` command:
-npm install -g github:supermario2828/typer
+npm install -g https://github.com/supermario2828/typer/tarball/main
 typer                       # launch from anywhere
 typer --mode=punctuation --difficulty=hard --length=50 --profile=marius
 
@@ -51,9 +51,12 @@ npx --yes github:supermario2828/typer
 npm run cli
 ```
 
-> Both `install -g` and `npx github:...` work because the repo is **public** and
-> `package.json` exposes a `bin` (`typer`). The web app shows the install
-> command with a copy button at the bottom of the page.
+> **Install from the tarball URL, not `github:user/repo`.** Installing a *git*
+> URL globally triggers an npm bug where the global `typer` is symlinked to a
+> temporary git clone that npm then deletes — leaving a dangling link and
+> "command not found". The `/tarball/main` URL is a plain remote tarball, so npm
+> copies it properly. If reinstalling in the same shell still shows "command not
+> found", run `hash -r` or open a new terminal (zsh caches the old lookup).
 
 - **Menu:** `m` mode · `d` difficulty · `l` length · `s` stats · `Enter` start · `q` quit
 - **During a test:** a 3-2-1 countdown, live WPM/accuracy/progress, colour-coded

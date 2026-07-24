@@ -9,8 +9,10 @@ import { initAnalytics } from './firebase/config.js';
 // ---------------------------------------------------------------- constants
 const REPO_URL = 'https://github.com/supermario2828/typer';
 // Install the terminal version globally (needs Node.js). Afterwards the `typer`
-// command is available anywhere on that machine.
-const CLI_COMMAND = 'npm install -g github:supermario2828/typer';
+// command is available anywhere on that machine. NOTE: we install from the
+// GitHub *tarball* URL, not `github:user/repo` — the git-URL form makes npm
+// symlink the global package to a temp clone it then deletes (dangling `typer`).
+const CLI_COMMAND = 'npm install -g https://github.com/supermario2828/typer/tarball/main';
 
 // ---------------------------------------------------------------- app state
 const cfg = loadConfig();
