@@ -59,6 +59,25 @@ export function interactiveLogin(onUrl) {
   const state = b64url(crypto.randomBytes(16));
 
   return new Promise((resolve, reject) => {
+    let redirectUri = '';
+
+    async function exchange(code) {
+      const r = await fetch(TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: creds.clientId,
+          client_secret: creds.clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+          code_verifier: verifier,
+        }),
+      });
+      if (!r.ok) throw new Error(`token exchange failed (${r.status})`);
+      return r.json();
+    }
+
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://127.0.0.1');
       if (!url.searchParams.has('code') && !url.searchParams.has('error')) {
@@ -90,7 +109,7 @@ export function interactiveLogin(onUrl) {
 
     server.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
-      const redirectUri = `http://127.0.0.1:${port}`;
+      redirectUri = `http://127.0.0.1:${port}`;
       const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams({
         client_id: creds.clientId,
         redirect_uri: redirectUri,
@@ -104,24 +123,6 @@ export function interactiveLogin(onUrl) {
       })}`;
       if (onUrl) onUrl(authUrl);
       openBrowser(authUrl);
-
-      async function exchange(code) {
-        const body = new URLSearchParams({
-          code,
-          client_id: creds.clientId,
-          client_secret: creds.clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: 'authorization_code',
-          code_verifier: verifier,
-        });
-        const r = await fetch(TOKEN_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body,
-        });
-        if (!r.ok) throw new Error(`token exchange failed (${r.status})`);
-        return r.json();
-      }
     });
 
     server.on('error', reject);
