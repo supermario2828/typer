@@ -35,6 +35,10 @@ function parseArgs(argv) {
 
 if (!process.stdin.isTTY) {
   console.error('Typer needs an interactive terminal (TTY). Run it directly, not piped.');
+  if (process.platform === 'win32') {
+    console.error('On Windows, use Windows Terminal, PowerShell, or cmd — Git Bash/MinTTY');
+    console.error('does not provide a real TTY (or prefix with: winpty typer).');
+  }
   process.exit(1);
 }
 

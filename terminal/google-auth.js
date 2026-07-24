@@ -37,9 +37,20 @@ const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g
 
 function openBrowser(url) {
   try {
-    if (process.platform === 'darwin') spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
-    else if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true }).unref();
-    else spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+    if (process.platform === 'darwin') {
+      spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+    } else if (process.platform === 'win32') {
+      // Wrap the URL in quotes so cmd's `start` doesn't treat `&` in the query
+      // string as a command separator; windowsVerbatimArguments keeps Node from
+      // re-quoting. The empty "" is start's window-title argument.
+      spawn('cmd', ['/c', 'start', '""', `"${url}"`], {
+        windowsVerbatimArguments: true,
+        stdio: 'ignore',
+        detached: true,
+      }).unref();
+    } else {
+      spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+    }
   } catch {
     /* user can copy the URL from the screen */
   }

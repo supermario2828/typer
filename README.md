@@ -73,6 +73,18 @@ metrics and leaderboard ranking come from `src/core/`, and it talks to Firebase
 no Firebase SDK. That's why `npm install -g` is tiny and instant. (The Firebase
 *SDK* is only a dev dependency, used to build the web app.) Needs a TTY.
 
+### Platform support
+
+Works on **macOS, Linux, and Windows** (Node 18+) — plain ANSI + raw stdin with
+cross-platform browser launching (`open` / `xdg-open` / `cmd start`).
+
+- **Windows:** run it in **Windows Terminal, PowerShell, or cmd**. Git Bash /
+  MinTTY don't provide a real TTY for raw input — if you must use them, prefix
+  with `winpty typer`.
+- **Linux:** any standard terminal. Google sign-in's browser launch uses
+  `xdg-open` (present on desktop installs; on a headless box, copy the URL the
+  CLI prints instead).
+
 ### CLI Google sign-in (optional — to post CLI runs to the leaderboard)
 
 By default the terminal reads the leaderboard anonymously. Sign in with Google

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "A typing speed & accuracy game — web and terminal, TypeRacer style.",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "typer": "terminal/typer-cli.js"
   },
