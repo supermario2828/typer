@@ -303,6 +303,23 @@ kbd {
 .link:hover { color: var(--error); }
 .empty { color: var(--muted); font-size: 14px; padding: 20px 0; text-align: center; }
 
+/* terminal call-to-action */
+.cli-cta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 8px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: 13px;
+}
+.cli-cta .cli-label { color: var(--muted); }
+.cli-cta code {
+  flex: 1; min-width: 220px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; color: var(--accent); font-family: var(--mono); font-size: 13px;
+  user-select: all; overflow-x: auto; white-space: nowrap;
+}
+.cli-cta .cli-src { color: var(--muted); text-decoration: none; font-size: 12px; }
+.cli-cta .cli-src:hover { color: var(--accent); }
+
 @media (max-width: 640px) {
   .result-grid { grid-template-columns: 1fr; }
   .result-hero { border-right: none; border-bottom: 1px solid var(--line); padding: 0 0 20px; }

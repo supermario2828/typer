@@ -6,6 +6,7 @@
 import { LocalStatsStore } from './storage.js';
 import { FirebaseStatsStore } from './firebaseStore.js';
 import { deviceService } from './device.js';
+import { rankScores, sinceFor } from '../core/leaderboard.js';
 
 const local = new LocalStatsStore();
 const cloud = new FirebaseStatsStore();
@@ -15,7 +16,6 @@ const cloud = new FirebaseStatsStore();
 // way, only the *global* submission is gated.
 const LB_MAX_WPM = 300;
 const LB_MIN_SECONDS = 2;
-const PERIOD_MS = { day: 86400000, month: 2592000000, all: Infinity };
 
 export const statsService = {
   machineIdValue: '',
@@ -93,26 +93,8 @@ export const statsService = {
   // Keeps each player's single best entry in the window. Requires sign-in
   // (rules only allow authenticated reads).
   async leaderboard({ period = 'day', metric = 'wpm', mode = 'words', difficulty = 'medium' } = {}) {
-    const span = PERIOD_MS[period] ?? PERIOD_MS.day;
-    const since = span === Infinity ? 0 : Date.now() - span;
-    const all = await cloud.getScores(since);
-    // Quotes have no difficulty, so only filter difficulty for the other modes.
-    const scores = all.filter(
-      (s) => s.mode === mode && (mode === 'quotes' || s.difficulty === difficulty),
-    );
-    const best = new Map();
-    for (const s of scores) {
-      const cur = best.get(s.uid);
-      const better = metric === 'accuracy'
-        ? s.accuracy > (cur?.accuracy ?? -1) || (s.accuracy === cur?.accuracy && s.wpm > cur.wpm)
-        : s.wpm > (cur?.wpm ?? -1);
-      if (!cur || better) best.set(s.uid, s);
-    }
-    const rows = [...best.values()];
-    rows.sort((a, b) =>
-      metric === 'accuracy' ? b.accuracy - a.accuracy || b.wpm - a.wpm : b.wpm - a.wpm || b.accuracy - a.accuracy,
-    );
-    return rows.slice(0, 25);
+    const scores = await cloud.getScores(sinceFor(period));
+    return rankScores(scores, { metric, mode, difficulty });
   },
 
   async runs() {

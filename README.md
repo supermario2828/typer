@@ -31,6 +31,70 @@ npm run preview  # preview the production build
 - Just start typing to begin. Errors highlight red; backspace to fix.
 - `Tab` — fresh test · `Esc` — reset the current one.
 
+## Terminal version
+
+A full-featured terminal client that reuses the **same** engine, generator and
+metrics as the web app (from `src/core/`), so scoring is identical. Stats are
+stored locally per profile + machine in `~/.typer/stats.json` (Firebase auth
+doesn't fit a CLI, so the terminal is local-only).
+
+```bash
+# Run it straight from GitHub (needs Node.js) — no clone required:
+npx --yes github:supermario2828/typer
+
+# ...or from a checkout:
+npm run cli
+# or with options / a named profile:
+node terminal/typer-cli.js --mode=punctuation --difficulty=hard --length=50 --profile=marius
+```
+
+> `npx github:...` works because the repo is **public** and `package.json`
+> exposes a `bin` (`typer`). The web app also shows this command with a copy
+> button at the bottom of the page.
+
+- **Menu:** `m` mode · `d` difficulty · `l` length · `s` stats · `Enter` start · `q` quit
+- **During a test:** a 3-2-1 countdown, live WPM/accuracy/progress, colour-coded
+  characters (correct = white, wrong = red, pending = dim, cursor = highlighted),
+  word-safe wrapping to your terminal width. `Tab` restart · `Esc` menu.
+- **After:** WPM, accuracy, raw WPM, consistency, time, characters, errors, and a
+  personal-best flag. `Enter` next · `r` retry · `m` menu · `q` quit.
+- **Leaderboard** (`b` from the menu): a read-only view of the same global
+  leaderboard as the web app, for the category matching your menu selection.
+  `p` cycles period, `t` toggles fastest/most-accurate. The CLI reads it via
+  Firebase **anonymous** auth (enable it in the console — see Firebase setup);
+  getting *onto* the board is done by signing in with Google on the web.
+
+The engine, generator, metrics and leaderboard ranking all come from `src/`, so
+the terminal is zero-deps of its own — just Firebase (already a dependency) for
+the leaderboard read. Needs an interactive TTY.
+
+### CLI Google sign-in (optional — to post CLI runs to the leaderboard)
+
+By default the terminal reads the leaderboard anonymously. Sign in with Google
+(`g` from the menu) to make your terminal runs **count on the leaderboard** as
+your account. It uses the OAuth loopback flow: the CLI opens your browser, you
+approve, and a refresh token is saved to `~/.typer/auth.json` (mode 600) so you
+stay signed in. Your password is never seen by the CLI.
+
+This needs a **Google OAuth "Desktop app" client** (the web client can't do the
+loopback redirect). One-time setup:
+
+1. [Google Cloud console](https://console.cloud.google.com/apis/credentials) →
+   project **digi-typer** → **Create Credentials → OAuth client ID → Desktop app**.
+2. Provide the client id + secret to the CLI, either via env vars:
+   ```bash
+   export GOOGLE_CLIENT_ID="....apps.googleusercontent.com"
+   export GOOGLE_CLIENT_SECRET="..."
+   ```
+   or `~/.typer/oauth.json`:
+   ```json
+   { "client_id": "....apps.googleusercontent.com", "client_secret": "..." }
+   ```
+
+For installed apps Google does not treat the client secret as confidential, but
+this keeps it out of the public repo. If it isn't configured, the CLI simply
+stays in read-only (anonymous) leaderboard mode.
+
 ## Firebase (Google sign-in + cloud stats)
 
 The game works signed-out (stats saved locally on the device). Signing in with
@@ -41,9 +105,11 @@ design; access is guarded by security rules).
 **One-time setup in the [Firebase console](https://console.firebase.google.com/project/digi-typer):**
 
 1. **Authentication → Sign-in method → Google → Enable.** Set a support email, save.
-2. **Firestore Database → Create database** (production mode is fine — rules below lock it down).
-3. **Firestore → Rules** → paste the contents of [`firestore.rules`](firestore.rules) → **Publish**.
-4. **Authentication → Settings → Authorized domains** → add the domain you host on
+2. **Authentication → Sign-in method → Anonymous → Enable.** This lets the
+   terminal client read the leaderboard (read-only) without a Google login.
+3. **Firestore Database → Create database** (production mode is fine — rules below lock it down).
+4. **Firestore → Rules** → paste the contents of [`firestore.rules`](firestore.rules) → **Publish**.
+5. **Authentication → Settings → Authorized domains** → add the domain you host on
    (e.g. `yourdomain.co.za`). `localhost` is already allowed for local dev.
 
 That's it — no keys to rotate, nothing server-side.
@@ -104,12 +170,18 @@ src/
     stats.js       service: profiles, saving runs, summaries
   main.js      web UI (wires the engine to the DOM)
   style.css
+terminal/      <- the CLI client (Node, zero deps)
+  typer-cli.js   state machine / orchestrator
+  render.js      ANSI frames + word-safe wrapping
+  keys.js        raw stdin -> logical key events
+  store.js       ~/.typer/stats.json persistence
 ```
 
 Two seams were designed in from the start:
 
-- **`src/core/` is pure JS with no DOM.** The upcoming terminal client imports
-  the exact same `TypingEngine`, generator and metrics — no logic duplicated.
+- **`src/core/` is pure JS with no DOM.** The terminal client (`terminal/`)
+  imports the exact same `TypingEngine`, generator and metrics — no logic
+  duplicated between web and CLI.
 - **`src/store/storage.js` is an interface.** The whole app talks to a
   `StatsStore` with async methods. Today it's `LocalStatsStore` (localStorage,
   keyed by a stable per-machine id). To move stats to the cloud, implement the
@@ -123,4 +195,4 @@ Two seams were designed in from the start:
 - [x] Firestore stats backend (`FirebaseStatsStore`)
 - [x] Named devices synced to your account
 - [x] Global leaderboards (day / month / all-time · fastest / most accurate)
-- [ ] Terminal version (`npm run cli`) reusing `src/core/`
+- [x] Terminal version (`npm run cli`) reusing `src/core/`
