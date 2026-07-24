@@ -12,10 +12,13 @@
     "preview": "vite preview",
     "cli": "node terminal/typer-cli.js"
   },
+  "files": [
+    "terminal",
+    "src/core",
+    "src/firebase/project.js"
+  ],
   "devDependencies": {
-    "vite": "^5.4.0"
-  },
-  "dependencies": {
+    "vite": "^5.4.0",
     "firebase": "^12.16.0"
   }
 }

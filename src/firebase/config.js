@@ -4,16 +4,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-
-const firebaseConfig = {
-  apiKey: 'AIzaSyAvh4_8_xNBvg6QFxgRpy2Z7QI99mvxrsY',
-  authDomain: 'digi-typer.firebaseapp.com',
-  projectId: 'digi-typer',
-  storageBucket: 'digi-typer.firebasestorage.app',
-  messagingSenderId: '708032044767',
-  appId: '1:708032044767:web:999c3e8ed31af7fee0936a',
-  measurementId: 'G-D4VLNZLBSG',
-};
+import { firebaseConfig } from './project.js';
 
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);

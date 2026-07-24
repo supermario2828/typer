@@ -1,26 +1,23 @@
-// Read-only leaderboard access for the terminal client. The global `scores`
-// collection is readable only by authenticated users, so the CLI signs in
-// ANONYMOUSLY (no interaction) purely to read. It never writes — getting onto
-// the leaderboard is done by signing in with Google on the web app.
-import { auth } from '../src/firebase/config.js';
-import { signInAnonymously } from 'firebase/auth';
-import { FirebaseStatsStore } from '../src/store/firebaseStore.js';
+// Read-only leaderboard access for the terminal client, over the Firestore REST
+// API. Reads as the signed-in Google user if there is one, otherwise signs in
+// anonymously (both satisfy the "any authenticated user may read" rule).
+import { signInAnonymously, getScores } from './firebase-rest.js';
 import { rankScores, sinceFor } from '../src/core/leaderboard.js';
+import { session } from './session.js';
 
-const fb = new FirebaseStatsStore();
-let anon = null;
+let anon = null; // { idToken, ts }
+const TOKEN_TTL = 50 * 60 * 1000;
 
-async function ensureAuth() {
-  // If the user signed in with Google, read as them — never anonymously sign in
-  // over an existing session (that would replace the current user).
-  if (auth.currentUser) return auth.currentUser;
-  if (anon) return anon;
-  anon = (await signInAnonymously(auth)).user;
-  return anon;
+async function readerToken() {
+  if (session.user) return session.getIdToken();
+  if (anon && Date.now() - anon.ts < TOKEN_TTL) return anon.idToken;
+  const a = await signInAnonymously();
+  anon = { idToken: a.idToken, ts: Date.now() };
+  return anon.idToken;
 }
 
 export async function fetchLeaderboard({ period, metric, mode, difficulty }) {
-  await ensureAuth();
-  const scores = await fb.getScores(sinceFor(period));
+  const token = await readerToken();
+  const scores = await getScores(token, sinceFor(period));
   return rankScores(scores, { metric, mode, difficulty });
 }

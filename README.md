@@ -67,9 +67,11 @@ npm run cli
   Firebase **anonymous** auth (enable it in the console — see Firebase setup);
   getting *onto* the board is done by signing in with Google on the web.
 
-The engine, generator, metrics and leaderboard ranking all come from `src/`, so
-the terminal is zero-deps of its own — just Firebase (already a dependency) for
-the leaderboard read. Needs an interactive TTY.
+The terminal client has **zero runtime dependencies**: the engine, generator,
+metrics and leaderboard ranking come from `src/core/`, and it talks to Firebase
+(auth + Firestore) over the plain **REST API** with Node's built-in `fetch` —
+no Firebase SDK. That's why `npm install -g` is tiny and instant. (The Firebase
+*SDK* is only a dev dependency, used to build the web app.) Needs a TTY.
 
 ### CLI Google sign-in (optional — to post CLI runs to the leaderboard)
 
