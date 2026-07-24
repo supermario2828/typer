@@ -1,0 +1,18 @@
+{
+  "name": "typer",
+  "version": "0.1.0",
+  "description": "A typing speed & accuracy game — web and terminal, TypeRacer style.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "cli": "node terminal/typer-cli.js"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "firebase": "^12.16.0"
+  }
+}
