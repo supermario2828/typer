@@ -124,8 +124,11 @@ html, body {
 .runs.board td.pos { width: 34px; font-size: 16px; text-align: center; }
 .runs.board .rank { color: var(--muted); font-size: 13px; }
 .runs.board td.who { display: flex; align-items: center; gap: 8px; }
+/* The ranked column is the emphasised one — the other two stay recessive so
+   the sort order is legible without reading the tabs. */
 .runs.board td.primary { color: var(--accent); font-size: 16px; }
 .runs.board td.muted { color: var(--muted); }
+.runs th.ranked { color: var(--accent); }
 .runs.board tr.me { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .runs.board tr.me td.who span { color: var(--accent); }
 .avatar.sm { width: 22px; height: 22px; }

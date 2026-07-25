@@ -8,6 +8,7 @@ import { gradeRun, scoreOf } from '../src/core/verdict.js';
 import { store } from './store.js';
 import { startKeys } from './keys.js';
 import { fetchLeaderboard } from './cloud.js';
+import { BOARD_METRICS } from '../src/core/leaderboard.js';
 import { session } from './session.js';
 import { checkForUpdate, runUpdate, updateCommand, installKind, PKG_ROOT } from './update.js';
 import * as R from './render.js';
@@ -77,7 +78,7 @@ let liveTimer = null;
 
 // leaderboard view state
 let boardPeriod = 'all';
-let boardMetric = 'wpm';
+let boardMetric = 'score';
 let board = { loading: false, err: null, rows: [] };
 let boardReq = 0; // guards against out-of-order async responses
 let signin = { flow: null, url: null, userCode: null, err: null, done: false };
@@ -440,7 +441,7 @@ function boardKey(key) {
   if (key.name !== 'char') return;
   switch (key.char) {
     case 'p': boardPeriod = cycle(['day', 'month', 'all'], boardPeriod); return loadBoard();
-    case 't': boardMetric = boardMetric === 'wpm' ? 'accuracy' : 'wpm'; return loadBoard();
+    case 't': boardMetric = cycle(BOARD_METRICS, boardMetric); return loadBoard();
     case 'r': return loadBoard();
     case 'q': return quit();
   }

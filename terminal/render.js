@@ -338,7 +338,7 @@ export function renderLeaderboard(cfg, opts) {
     ? MODES.quotes.label
     : `${MODES[cfg.mode].label} · ${cfg.difficulty}`;
   const periodLabel = { day: 'today', month: 'this month', all: 'all time' }[period];
-  const metricLabel = metric === 'accuracy' ? 'most accurate' : 'fastest';
+  const metricLabel = { score: 'best score', accuracy: 'most accurate', wpm: 'fastest' }[metric] || 'best score';
 
   const L = [];
   L.push('');
@@ -355,22 +355,27 @@ export function renderLeaderboard(cfg, opts) {
   } else if (!rows.length) {
     L.push(INDENT + `${A.dim}no scores for this category & period yet.${A.reset}`);
   } else {
-    L.push(INDENT + `${A.gray}${pad('#', 4)}${pad('player', 22)}${pad(metric === 'accuracy' ? 'acc' : 'wpm', 8)}${pad(metric === 'accuracy' ? 'wpm' : 'acc', 8)}device${A.reset}`);
+    // All three numbers, with the ranked one highlighted, so the sort order is
+    // readable without checking the header.
+    const head = (key, label) => (metric === key ? A.accent : A.gray) + pad(label, 8) + A.reset;
+    L.push(INDENT + `${A.gray}${pad('#', 4)}${pad('player', 22)}${A.reset}`
+      + head('score', 'score') + head('wpm', 'wpm') + head('accuracy', 'acc') + `${A.gray}device${A.reset}`);
     rows.forEach((r, i) => {
-      const primary = metric === 'accuracy' ? `${r.accuracy}%` : `${r.wpm}`;
-      const secondary = metric === 'accuracy' ? `${r.wpm}` : `${r.accuracy}%`;
+      const col = (key, text) => (metric === key ? A.accent : A.dim) + pad(text, 8) + A.reset;
       const rank = i < 3 ? A.accent + pad(String(i + 1), 4) + A.reset : A.dim + pad(String(i + 1), 4) + A.reset;
       const me = myUid && r.uid === myUid;
       const name = trunc(r.name || 'Player', 20) + (me ? ' (you)' : '');
       L.push(INDENT
         + rank
         + (me ? A.accent : A.white) + pad(name, 22) + A.reset
-        + A.accent + pad(primary, 8) + A.reset
-        + A.dim + pad(secondary, 8) + (r.device || '—') + A.reset);
+        + col('score', String(scoreOf(r)))
+        + col('wpm', String(r.wpm))
+        + col('accuracy', r.accuracy + '%')
+        + A.dim + (r.device || '—') + A.reset);
     });
   }
   L.push('');
-  L.push(INDENT + `${A.dim}keys:${A.reset} ${A.white}p${A.reset} period   ${A.white}t${A.reset} fastest/accurate   ${A.white}r${A.reset} refresh   ${A.accent}⏎${A.reset}/${A.white}Esc${A.reset} menu   ${A.white}q${A.reset} quit`);
+  L.push(INDENT + `${A.dim}keys:${A.reset} ${A.white}p${A.reset} period   ${A.white}t${A.reset} score/fastest/accurate   ${A.white}r${A.reset} refresh   ${A.accent}⏎${A.reset}/${A.white}Esc${A.reset} menu   ${A.white}q${A.reset} quit`);
   L.push(INDENT + `${A.dim}category follows your menu selection (mode + difficulty).${A.reset}`);
   L.push('');
   return L.join('\n') + '\n';

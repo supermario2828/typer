@@ -79,7 +79,7 @@ let statsOpen = false;
 let boardOpen = false;
 let histThisMachine = false;
 let boardPeriod = 'day';
-let boardMetric = 'wpm';
+let boardMetric = 'score';
 let boardMode = cfg.mode;
 let boardDifficulty = cfg.difficulty;
 
@@ -739,7 +739,7 @@ async function renderBoard() {
   }
 
   const periods = [['day', 'Today'], ['month', 'This month'], ['all', 'All time']];
-  const metrics = [['wpm', 'Fastest'], ['accuracy', 'Most accurate']];
+  const metrics = [['score', 'Best score'], ['wpm', 'Fastest'], ['accuracy', 'Most accurate']];
   const modeItems = Object.entries(MODES).map(([k, v]) => [k, v.label]);
   const diffItems = DIFFICULTIES.map((d) => [d, d]);
   const tabs = (items, cur, attr) => items
@@ -798,9 +798,10 @@ async function renderBoard() {
   }
 
   const myUid = statsService.identity.id;
+  // All three numbers are always shown; the ranked one is the emphasised
+  // column, so it's never a guess what the order is based on.
+  const cell = (key, text) => `<td class="${boardMetric === key ? 'primary' : 'muted'}">${text}</td>`;
   const body = rows.map((r, i) => {
-    const primary = boardMetric === 'accuracy' ? `${r.accuracy}%` : `${r.wpm}`;
-    const secondary = boardMetric === 'accuracy' ? `${r.wpm} wpm` : `${r.accuracy}%`;
     const medal = ['🥇', '🥈', '🥉'][i] || `<span class="rank">${i + 1}</span>`;
     const avatar = r.photo
       ? `<img class="avatar sm" src="${r.photo}" alt="" referrerpolicy="no-referrer" />`
@@ -808,16 +809,22 @@ async function renderBoard() {
     return `<tr class="${r.uid === myUid ? 'me' : ''}">
         <td class="pos">${medal}</td>
         <td class="who">${avatar}<span>${escapeHtml(r.name || 'Player')}</span></td>
-        <td class="primary">${primary}</td>
-        <td class="muted">${secondary}</td>
+        ${cell('score', scoreOf(r))}
+        ${cell('wpm', r.wpm)}
+        ${cell('accuracy', r.accuracy + '%')}
         <td class="muted">${escapeHtml(r.device || '—')}</td>
         <td class="muted">${timeAgo(r.at)}</td>
       </tr>`;
   }).join('');
 
+  const th = (key, label) => `<th class="${boardMetric === key ? 'ranked' : ''}">${label}</th>`;
   document.getElementById('boardBody').innerHTML = `
     <table class="runs board">
-      <thead><tr><th></th><th>player</th><th>${boardMetric === 'accuracy' ? 'acc' : 'wpm'}</th><th>${boardMetric === 'accuracy' ? 'wpm' : 'acc'}</th><th>device</th><th>when</th></tr></thead>
+      <thead><tr>
+        <th></th><th>player</th>
+        ${th('score', 'score')}${th('wpm', 'wpm')}${th('accuracy', 'acc')}
+        <th>device</th><th>when</th>
+      </tr></thead>
       <tbody>${body}</tbody>
     </table>`;
 }

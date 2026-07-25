@@ -92,7 +92,7 @@ export const statsService = {
   //   mode: 'words'|'punctuation'|'numbers'|'quotes'; difficulty: easy|medium|hard
   // Keeps each player's single best entry in the window. Requires sign-in
   // (rules only allow authenticated reads).
-  async leaderboard({ period = 'day', metric = 'wpm', mode = 'words', difficulty = 'medium' } = {}) {
+  async leaderboard({ period = 'day', metric = 'score', mode = 'words', difficulty = 'medium' } = {}) {
     const scores = await cloud.getScores(sinceFor(period));
     return rankScores(scores, { metric, mode, difficulty });
   },
