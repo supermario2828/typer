@@ -9,10 +9,15 @@ import { initAnalytics } from './firebase/config.js';
 // ---------------------------------------------------------------- constants
 const REPO_URL = 'https://github.com/supermario2828/typer';
 // Install the terminal version globally (needs Node.js). Afterwards the `typer`
-// command is available anywhere on that machine. NOTE: we install from the
-// GitHub *tarball* URL, not `github:user/repo` — the git-URL form makes npm
-// symlink the global package to a temp clone it then deletes (dangling `typer`).
-const CLI_COMMAND = 'npm install -g https://github.com/supermario2828/typer/tarball/main';
+// command is available anywhere on that machine. Two npm quirks are baked into
+// this command:
+//   1. We install from the GitHub *tarball* URL, not `github:user/repo` — the
+//      git-URL form makes npm symlink the global package to a temp clone it
+//      then deletes (dangling `typer`).
+//   2. `--allow-remote=all` is required: as of npm 12 `allow-remote` defaults
+//      to "none", so installing a tarball URL off the registry's host fails
+//      with EALLOWREMOTE. Older npm just warns about the unknown config.
+const CLI_COMMAND = 'npm install -g --allow-remote=all https://github.com/supermario2828/typer/tarball/main';
 
 // ---------------------------------------------------------------- app state
 const cfg = loadConfig();

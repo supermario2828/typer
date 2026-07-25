@@ -40,16 +40,23 @@ doesn't fit a CLI, so the terminal is local-only).
 
 ```bash
 # Install once (needs Node.js) — adds a global `typer` command:
-npm install -g https://github.com/supermario2828/typer/tarball/main
+npm install -g --allow-remote=all https://github.com/supermario2828/typer/tarball/main
 typer                       # launch from anywhere
 typer --mode=punctuation --difficulty=hard --length=50 --profile=marius
 
 # Prefer not to install? Run it transiently:
-npx --yes github:supermario2828/typer
+npx --yes --allow-remote=all https://github.com/supermario2828/typer/tarball/main
 
 # From a checkout:
 npm run cli
 ```
+
+> **`--allow-remote=all` is not optional on npm 12+.** npm 12 changed the
+> `allow-remote` default to `none`, so a tarball URL that isn't on the
+> registry's own host is refused with `npm error code EALLOWREMOTE`. The flag
+> opts in for that one command. (`allow-git` went `none` the same way, which is
+> why plain `npx github:user/repo` now fails with `EALLOWGIT`.) On npm < 12 the
+> flag is simply an unknown config — harmless.
 
 > **Install from the tarball URL, not `github:user/repo`.** Installing a *git*
 > URL globally triggers an npm bug where the global `typer` is symlinked to a
@@ -57,6 +64,17 @@ npm run cli
 > "command not found". The `/tarball/main` URL is a plain remote tarball, so npm
 > copies it properly. If reinstalling in the same shell still shows "command not
 > found", run `hash -r` or open a new terminal (zsh caches the old lookup).
+
+> **`EACCES` / permission denied on Linux?** Distro-packaged npm (Arch, some
+> Debian setups) uses a global prefix of `/usr`, which isn't writable by your
+> user — and `sudo npm i -g` there fights the system package manager. Point npm
+> at your home instead (`~/.local/bin` is usually already on `PATH`):
+>
+> ```bash
+> npm config set prefix ~/.local            # once, then install as normal
+> # or per-command:
+> npm install -g --prefix ~/.local --allow-remote=all https://github.com/supermario2828/typer/tarball/main
+> ```
 
 - **Menu:** `m` mode · `d` difficulty · `l` length · `s` stats · `Enter` start · `q` quit
 - **During a test:** a 3-2-1 countdown, live WPM/accuracy/progress, colour-coded
