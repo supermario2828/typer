@@ -2,7 +2,7 @@
 // string; the orchestrator writes it. Word-safe wrapping mirrors the web
 // version — lines only ever break between words, never mid-word.
 import { MODES, DIFFICULTIES, LENGTHS } from '../src/core/generator.js';
-import { rgbFor } from '../src/core/verdict.js';
+import { rgbFor, scoreOf } from '../src/core/verdict.js';
 
 export const A = {
   reset: '\x1b[0m',
@@ -118,7 +118,7 @@ export function renderMenu(cfg, best, auth = {}, dev = {}) {
   L.push(INDENT + `${A.gray}length      ${A.reset}${dimDiff ? A.dim + '(full quote)' + A.reset : seg(LENGTHS.map(String), String(cfg.length))}`);
   L.push('');
   if (best && best.count) {
-    L.push(INDENT + `${A.green}best ${best.bestWpm} wpm${A.reset}${A.dim}  ·  avg ${best.avgWpm} wpm  ·  ${best.avgAcc}% acc  ·  ${best.count} tests in this category${A.reset}`);
+    L.push(INDENT + `${A.green}best ${best.bestScore}${A.reset}${A.dim}  ·  avg ${best.avgScore} score  ·  ${best.bestWpm} wpm best  ·  ${best.avgAcc}% acc  ·  ${best.count} tests in this category${A.reset}`);
     L.push('');
   }
   L.push(INDENT + `${A.dim}keys:${A.reset} ${A.white}m${A.reset} mode   ${A.white}d${A.reset} difficulty   ${A.white}l${A.reset} length   ${A.white}s${A.reset} stats   ${A.white}b${A.reset} leaderboard`);
@@ -388,13 +388,17 @@ export function renderStats(profile, device, sum) {
   if (!sum.count) {
     L.push(INDENT + `${A.dim}No runs yet. Play a test and your stats will show here.${A.reset}`);
   } else {
-    L.push(INDENT + `${A.green}best ${sum.bestWpm} wpm${A.reset}   ${A.white}avg ${sum.avgWpm} wpm${A.reset}   ${A.white}avg ${sum.avgAcc}% acc${A.reset}   ${A.dim}${sum.count} tests${A.reset}`);
+    L.push(INDENT + `${A.green}best ${sum.bestScore}${A.reset}   ${A.white}avg ${sum.avgScore}${A.reset}${A.dim} score${A.reset}   ${A.dim}·${A.reset}   ${A.white}best ${sum.bestWpm} wpm${A.reset}   ${A.white}avg ${sum.avgAcc}% acc${A.reset}   ${A.dim}${sum.count} tests${A.reset}`);
     L.push('');
-    L.push(INDENT + `${A.gray}${pad('wpm', 7)}${pad('acc', 7)}${pad('mode', 22)}${pad('time', 7)}when${A.reset}`);
+    const spark = sparkline(sum.all.slice(-40).map(scoreOf));
+    if (spark) L.push(INDENT + spark);
+    L.push('');
+    L.push(INDENT + `${A.gray}${pad('score', 7)}${pad('wpm', 7)}${pad('acc', 7)}${pad('mode', 22)}${pad('time', 7)}when${A.reset}`);
     for (const r of sum.recent) {
       const mode = `${r.mode}${r.difficulty && r.difficulty !== '—' ? ' · ' + r.difficulty : ''}`;
       L.push(INDENT
-        + A.accent + pad(String(r.wpm), 7) + A.reset
+        + A.accent + pad(String(scoreOf(r)), 7) + A.reset
+        + A.white + pad(String(r.wpm), 7) + A.reset
         + A.white + pad(r.accuracy + '%', 7) + A.reset
         + A.dim + pad(mode, 22) + pad(r.seconds + 's', 7) + timeAgo(r.at) + A.reset);
     }
@@ -403,6 +407,25 @@ export function renderStats(profile, device, sum) {
   L.push(INDENT + `${A.accent}⏎ Enter${A.reset} back to menu   ${A.white}q${A.reset} quit`);
   L.push('');
   return L.join('\n') + '\n';
+}
+
+// The score trend as block characters — the terminal's answer to the web
+// sparkline. Same truncated axis, for the same reason: scores sit in a narrow
+// band well above zero, so anchoring there flattens real progress into a
+// straight line. A terminal row can't carry a drawn axis, so both ends of the
+// scale are printed beside it rather than left to be guessed.
+const BLOCKS = '▁▂▃▄▅▆▇█';
+function sparkline(scores) {
+  if (scores.length < 2) return '';
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const span = max - min;
+  const cells = scores.map((v) => {
+    const t = span === 0 ? 0.5 : (v - min) / span; // flat history sits mid-height
+    return BLOCKS[Math.round(t * (BLOCKS.length - 1))];
+  }).join('');
+  return `${A.dim}${min}${A.reset} ${A.accent}${cells}${A.reset} ${A.dim}${max}`
+    + `   last ${scores.length} runs · scale starts at ${min}, not zero${A.reset}`;
 }
 
 function timeAgo(ts) {

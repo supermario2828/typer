@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
+import { scoreOf } from '../src/core/verdict.js';
 
 const DIR = join(os.homedir(), '.typer');
 const FILE = join(DIR, 'stats.json');
@@ -81,16 +82,22 @@ export const store = {
       if (filter.difficulty && r.difficulty !== filter.difficulty) return false;
       return true;
     });
-    if (runs.length === 0) return { count: 0, bestWpm: 0, avgWpm: 0, avgAcc: 0, recent: [] };
+    if (runs.length === 0) {
+      return { count: 0, bestScore: 0, avgScore: 0, bestWpm: 0, avgWpm: 0, avgAcc: 0, recent: [], all: [] };
+    }
+    const scores = runs.map(scoreOf);
     const bestWpm = Math.max(...runs.map((r) => r.wpm));
     const avgWpm = runs.reduce((a, r) => a + r.wpm, 0) / runs.length;
     const avgAcc = runs.reduce((a, r) => a + r.accuracy, 0) / runs.length;
     return {
       count: runs.length,
+      bestScore: Math.max(...scores),
+      avgScore: Math.round(scores.reduce((a, s) => a + s, 0) / scores.length),
       bestWpm: Math.round(bestWpm),
       avgWpm: Math.round(avgWpm),
       avgAcc: Math.round(avgAcc),
       recent: runs.slice(-12).reverse(),
+      all: runs,
     };
   },
 };
