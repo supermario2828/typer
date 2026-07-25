@@ -4,6 +4,7 @@
 // per profile + machine in ~/.typer/stats.json.
 import { TypingEngine, STATUS } from '../src/core/engine.js';
 import { generate, MODES, DIFFICULTIES, LENGTHS } from '../src/core/generator.js';
+import { gradeRun } from '../src/core/verdict.js';
 import { store } from './store.js';
 import { startKeys } from './keys.js';
 import { fetchLeaderboard } from './cloud.js';
@@ -129,7 +130,7 @@ function render() {
       R.draw(R.renderTest(engine, cfg, { snapshot: engine.snapshot() }));
       break;
     case 'results':
-      R.draw(R.renderResults(engine.snapshot(), { ...meta, mode: cfg.mode }, meta._isPB));
+      R.draw(R.renderResults(engine.snapshot(), { ...meta, mode: cfg.mode }, meta._isPB, meta._verdict));
       break;
     case 'stats':
       R.draw(R.renderStats(profile, store.device(), store.summary(profile)));
@@ -206,6 +207,8 @@ function finishTest() {
   };
   const prev = store.summary(profile, categoryFilter());
   meta._isPB = s.wpm > 0 && (prev.count === 0 || s.wpm > prev.bestWpm);
+  // Graded before the save, so a run is never part of its own baseline.
+  meta._verdict = gradeRun(s.wpm, store.runs(profile), run);
   store.addRun(profile, run);
 
   // Signed in + credible run → post to the global leaderboard, same gate as web.

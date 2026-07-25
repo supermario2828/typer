@@ -2,6 +2,7 @@
 // string; the orchestrator writes it. Word-safe wrapping mirrors the web
 // version — lines only ever break between words, never mid-word.
 import { MODES, DIFFICULTIES, LENGTHS } from '../src/core/generator.js';
+import { rgbFor } from '../src/core/verdict.js';
 
 export const A = {
   reset: '\x1b[0m',
@@ -217,13 +218,54 @@ export function renderTest(engine, cfg, opts = {}) {
   return L.join('\n') + '\n';
 }
 
-export function renderResults(s, run, isPB) {
+// The verdict colour. Most modern terminals do 24-bit, which is what the ramp
+// was designed for; anywhere else we fall back to the four basic colours the
+// rest of this file already uses, so the grade still reads even on a plain tty.
+const TRUECOLOR = /truecolor|24bit/i.test(process.env.COLORTERM || '');
+function verdictColor(v) {
+  if (!v || !v.ready) return A.accent;
+  if (TRUECOLOR) {
+    const [r, g, b] = rgbFor(v.z);
+    return `\x1b[38;2;${r};${g};${b}m`;
+  }
+  if (v.z >= 1.0) return A.green;
+  if (v.z >= -0.35) return A.accent;
+  return A.red;
+}
+
+// [====|===o==] — the marker sits where this run landed between -2σ and +2σ of
+// the player's own spread; the pipe in the middle is their average.
+function verdictMeter(v, color, width = 21) {
+  const mid = Math.floor(width / 2);
+  const at = Math.min(width - 1, Math.max(0, Math.round(v.position * (width - 1))));
+  let bar = '';
+  for (let i = 0; i < width; i += 1) {
+    if (i === at) bar += `${color}o${A.reset}${A.dim}`;
+    else if (i === mid) bar += '|';
+    else bar += '=';
+  }
+  return `${A.dim}[${bar}]${A.reset}`;
+}
+
+export function renderResults(s, run, isPB, verdict) {
   const L = [];
+  const vc = verdictColor(verdict);
   L.push('');
   L.push(INDENT + `${A.accent}${A.bold}⌨ TYPER${A.reset}${A.dim}  result${A.reset}`);
   L.push('');
-  L.push(INDENT + `${A.accent}${A.bold}${String(s.wpm).padStart(3)} wpm${A.reset}    ${A.green}${s.accuracy}% accuracy${A.reset}`);
+  L.push(INDENT + `${vc}${A.bold}${String(s.wpm).padStart(3)} wpm${A.reset}    ${A.green}${s.accuracy}% accuracy${A.reset}`);
   if (isPB) L.push(INDENT + `${A.accent}★ new personal best${A.reset}`);
+  if (verdict) {
+    L.push('');
+    if (!verdict.ready) {
+      L.push(INDENT + `${A.dim}${verdict.label} — ${verdict.blurb}${A.reset}`);
+    } else {
+      const sign = verdict.delta > 0 ? '+' : verdict.delta < 0 ? '−' : '±';
+      L.push(INDENT + `${vc}${A.bold}${verdict.label.toUpperCase()}${A.reset}`);
+      L.push(INDENT + `${verdictMeter(verdict, vc)}  ${vc}${sign}${Math.abs(verdict.delta)} wpm${A.reset}${A.dim} vs your ${verdict.avg} avg${A.reset}`);
+      L.push(INDENT + `${A.dim}beats ${verdict.percentile}% of your last ${verdict.sample}${A.reset}`);
+    }
+  }
   L.push('');
   const row = (k, v) => INDENT + `${A.gray}${pad(k, 14)}${A.reset}${A.white}${v}${A.reset}`;
   L.push(row('raw wpm', s.rawWpm));

@@ -224,17 +224,55 @@ html, body {
 }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* The overlay is now only a click target (and the countdown's stage). The
+   start prompt moved out to .start-hint below, so nothing is ever printed on
+   top of the words — no blur, no scrim fighting the text for contrast. */
 .overlay {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  /* No blur — it made the first word hard to read. Just a light scrim. */
-  background: color-mix(in srgb, var(--bg) 40%, transparent);
   border-radius: var(--radius);
   cursor: pointer;
-  color: var(--muted);
-  font-size: 15px;
 }
 .overlay.hidden { display: none; }
+
+/* Waiting-to-start prompt. Sits under the text in normal flow, so it can be
+   full-contrast without competing with anything. Space is reserved when hidden
+   so starting a test doesn't shift the layout. */
+.start-hint {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.start-hint:hover { background: var(--surface-2); border-color: var(--accent-dim); }
+.start-hint:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.start-hint.hidden { visibility: hidden; }
+.start-hint kbd {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 2px 7px; color: var(--accent); font-family: var(--mono); font-size: 12px;
+}
+/* A slow blink that echoes the text cursor — reads as "waiting for you". */
+.start-hint .pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  animation: hintpulse 1.6s ease-in-out infinite;
+}
+@keyframes hintpulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  50% { opacity: .55; box-shadow: 0 0 0 6px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .start-hint .pulse { animation: none; }
+}
 /* During the countdown the text stays fully readable behind a translucent
    number. */
 .overlay.countdown { background: transparent; }
@@ -266,10 +304,93 @@ kbd {
 .results.hidden, .history.hidden { display: none; }
 .result-grid { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; }
 .result-hero { text-align: center; padding-right: 24px; border-right: 1px solid var(--line); }
-.result-hero .big { font-size: 64px; font-weight: 700; color: var(--accent); line-height: 1; }
+/* --verdict is set inline per run: the wpm number is tinted red→green by how
+   this run compares to the player's own history. Falls back to the accent
+   colour while there isn't enough history to judge. */
+.result-hero { --verdict: var(--accent); }
+.result-hero .big {
+  font-size: 64px;
+  font-weight: 700;
+  color: var(--verdict);
+  line-height: 1;
+  transition: color 400ms ease;
+}
 .result-hero .big span { font-size: 18px; color: var(--muted); font-weight: 400; }
 .result-hero .acc { margin-top: 8px; font-size: 20px; color: var(--good); }
 .pb { margin-top: 10px; color: var(--accent); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+
+/* ---------- verdict ---------- */
+.verdict { margin: 14px auto 0; width: min(210px, 100%); }
+.verdict .v-label {
+  color: var(--verdict);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.verdict .v-sub { margin-top: 7px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.verdict .v-sub b { color: var(--verdict); font-weight: 700; }
+.verdict.pending .v-label { color: var(--muted); }
+
+/* The scale the tint comes from, so the colour is readable at a glance: the
+   marker sits where this run landed between -2σ and +2σ of the player's own
+   spread, with the notch in the middle marking their average. */
+.verdict .v-meter {
+  position: relative;
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    hsl(0 78% 60%) 0%,
+    hsl(22 85% 58%) 25%,
+    hsl(55 85% 55%) 50%,
+    hsl(88 62% 55%) 75%,
+    hsl(145 58% 55%) 100%
+  );
+  opacity: 0.55;
+}
+.verdict .v-meter::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--bg);
+}
+.verdict .v-mark {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--verdict);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--verdict);
+  animation: verdict-slide 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes verdict-slide {
+  from { transform: translateX(-14px) scale(0.4); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* An exceptional run earns a little more than a colour. */
+.result-hero.verdict-exceptional .big {
+  text-shadow: 0 0 26px color-mix(in srgb, var(--verdict) 55%, transparent);
+  animation: verdict-pop 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes verdict-pop {
+  0% { transform: scale(0.88); }
+  55% { transform: scale(1.06); }
+  100% { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict .v-mark, .result-hero.verdict-exceptional .big { animation: none; }
+  .result-hero .big { transition: none; }
+}
 .result-detail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 20px; }
 .metric .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .metric .value { font-size: 24px; color: var(--text); margin-top: 2px; }

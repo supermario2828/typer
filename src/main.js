@@ -1,6 +1,7 @@
 import './style.css';
 import { TypingEngine, STATUS } from './core/engine.js';
 import { generate, MODES, DIFFICULTIES, LENGTHS } from './core/generator.js';
+import { gradeRun } from './core/verdict.js';
 import { statsService } from './store/stats.js';
 import { authService } from './store/auth.js';
 import { deviceService } from './store/device.js';
@@ -138,8 +139,15 @@ function renderShell() {
 
     <section class="stage">
       <div class="text" id="text" tabindex="0"></div>
-      <div class="overlay" id="overlay">click here or press any key to start typing</div>
+      <div class="overlay" id="overlay"></div>
     </section>
+
+    <!-- The start prompt lives below the text, not on top of it: overlaying it
+         means either blurring the words or fighting them for contrast. -->
+    <button class="start-hint" id="startHint" type="button">
+      <span class="pulse"></span>
+      <span>press <kbd>any key</kbd> or click the text to start</span>
+    </button>
 
     <div class="controls">
       <button class="btn" id="btnRestart">↻ new (Tab)</button>
@@ -180,6 +188,7 @@ function renderShell() {
   el.live = document.getElementById('live');
   el.text = document.getElementById('text');
   el.overlay = document.getElementById('overlay');
+  el.startHint = document.getElementById('startHint');
   el.results = document.getElementById('results');
   el.history = document.getElementById('history');
   el.board = document.getElementById('board');
@@ -190,6 +199,7 @@ function renderShell() {
   document.getElementById('btnBoard').onclick = toggleBoard;
   el.overlay.onclick = startCountdown;
   el.text.onclick = startCountdown;
+  el.startHint.onclick = startCountdown;
 
   el.cliCmd = document.getElementById('cliCmd');
   el.cliNote = document.getElementById('cliNote');
@@ -336,7 +346,7 @@ function newRun() {
   el.results.classList.add('hidden');
   el.live.classList.add('hidden');
   el.overlay.classList.remove('hidden');
-  el.overlay.textContent = 'click here or press any key to start typing';
+  el.startHint.classList.remove('hidden');
   renderText();
   stopLoop();
 }
@@ -349,7 +359,7 @@ function retry() {
   el.results.classList.add('hidden');
   el.live.classList.add('hidden');
   el.overlay.classList.remove('hidden');
-  el.overlay.textContent = 'click here or press any key to start typing';
+  el.startHint.classList.remove('hidden');
   renderText();
   stopLoop();
 }
@@ -372,6 +382,7 @@ function startCountdown() {
   el.text.focus();
   el.overlay.classList.remove('hidden');
   el.overlay.classList.add('countdown');
+  el.startHint.classList.add('hidden');
   let n = 3;
   const paint = () => { el.overlay.innerHTML = `<span class="count">${n}</span>`; };
   paint();
@@ -488,14 +499,20 @@ async function finishRun() {
   };
 
   let isPB = false;
+  // Graded against the runs stored *before* this one, so a run never counts
+  // itself as part of its own baseline.
+  let verdict = gradeRun(s.wpm, [], run);
   try {
-    const prev = await statsService.summary({ mode: cfg.mode });
-    isPB = (s.wpm > prev.bestWpm && prev.count > 0) || (prev.count === 0 && s.wpm > 0);
+    const prev = await statsService.runs();
+    const sameMode = prev.filter((r) => r.mode === cfg.mode);
+    const bestWpm = sameMode.length ? Math.max(...sameMode.map((r) => r.wpm)) : 0;
+    isPB = s.wpm > bestWpm && s.wpm > 0;
+    verdict = gradeRun(s.wpm, prev, run);
     await statsService.saveRun(run);
   } catch (err) {
     console.error('Could not save run:', err);
   }
-  renderResults(s, isPB);
+  renderResults(s, isPB, verdict);
   if (statsOpen) renderHistory();
   if (boardOpen) {
     // Point the board at the category just played so the new score is visible.
@@ -505,15 +522,16 @@ async function finishRun() {
   }
 }
 
-function renderResults(s, isPB) {
+function renderResults(s, isPB, verdict) {
   el.live.classList.add('hidden');
   el.results.classList.remove('hidden');
   const author = meta.author ? `<div class="author">— <b>${escapeHtml(meta.author)}</b></div>` : '';
   el.results.innerHTML = `
     <div class="result-grid">
-      <div class="result-hero">
+      <div class="result-hero verdict-${verdict.tier}" style="--verdict:${verdict.color}">
         <div class="big">${s.wpm}<span> wpm</span></div>
         <div class="acc">${s.accuracy}% accuracy</div>
+        ${verdictBlock(verdict)}
         ${isPB ? '<div class="pb">★ new personal best</div>' : ''}
       </div>
       <div>
@@ -536,6 +554,31 @@ function renderResults(s, isPB) {
   document.getElementById('rNext').onclick = () => { newRun(); startCountdown(); };
   document.getElementById('rRetry').onclick = () => { retry(); startCountdown(); };
 }
+// The verdict: how this run compares to the player's own history in the same
+// category. The wpm number itself is tinted (see .verdict-* in the CSS); this
+// block spells out what the colour means so it isn't a guessing game.
+function verdictBlock(v) {
+  if (!v.ready) {
+    return `
+      <div class="verdict pending">
+        <div class="v-label">${v.label}</div>
+        <div class="v-sub">${escapeHtml(v.blurb)}</div>
+      </div>`;
+  }
+  const sign = v.delta > 0 ? '+' : v.delta < 0 ? '−' : '±';
+  return `
+    <div class="verdict">
+      <div class="v-label">${v.label}</div>
+      <div class="v-meter" title="${v.percentile}% of your last ${v.sample} runs in this category">
+        <i class="v-mark" style="left:${(v.position * 100).toFixed(1)}%"></i>
+      </div>
+      <div class="v-sub">
+        <b>${sign}${Math.abs(v.delta)} wpm</b> vs your ${v.avg} avg
+        · beats ${v.percentile}% of your last ${v.sample}
+      </div>
+    </div>`;
+}
+
 function metric(label, value) {
   return `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div></div>`;
 }
