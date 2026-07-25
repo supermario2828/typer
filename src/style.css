@@ -316,7 +316,8 @@ kbd {
   transition: color 400ms ease;
 }
 .result-hero .big span { font-size: 18px; color: var(--muted); font-weight: 400; }
-.result-hero .acc { margin-top: 8px; font-size: 20px; color: var(--good); }
+/* wpm + accuracy are the supporting detail now that score is the headline. */
+.result-hero .acc { margin-top: 8px; font-size: 15px; color: var(--text); }
 .pb { margin-top: 10px; color: var(--accent); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
 
 /* ---------- verdict ---------- */

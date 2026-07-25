@@ -1,7 +1,7 @@
 import './style.css';
 import { TypingEngine, STATUS } from './core/engine.js';
 import { generate, MODES, DIFFICULTIES, LENGTHS } from './core/generator.js';
-import { gradeRun } from './core/verdict.js';
+import { gradeRun, scoreOf } from './core/verdict.js';
 import { statsService } from './store/stats.js';
 import { authService } from './store/auth.js';
 import { deviceService } from './store/device.js';
@@ -501,13 +501,15 @@ async function finishRun() {
   let isPB = false;
   // Graded against the runs stored *before* this one, so a run never counts
   // itself as part of its own baseline.
-  let verdict = gradeRun(s.wpm, [], run);
+  let verdict = gradeRun(run, []);
   try {
     const prev = await statsService.runs();
+    // The personal best follows the score, so it means the same thing the
+    // headline number does — your best run, not just your fastest.
     const sameMode = prev.filter((r) => r.mode === cfg.mode);
-    const bestWpm = sameMode.length ? Math.max(...sameMode.map((r) => r.wpm)) : 0;
-    isPB = s.wpm > bestWpm && s.wpm > 0;
-    verdict = gradeRun(s.wpm, prev, run);
+    const bestScore = sameMode.length ? Math.max(...sameMode.map(scoreOf)) : 0;
+    verdict = gradeRun(run, prev);
+    isPB = verdict.score > bestScore && verdict.score > 0;
     await statsService.saveRun(run);
   } catch (err) {
     console.error('Could not save run:', err);
@@ -529,8 +531,8 @@ function renderResults(s, isPB, verdict) {
   el.results.innerHTML = `
     <div class="result-grid">
       <div class="result-hero verdict-${verdict.tier}" style="--verdict:${verdict.color}">
-        <div class="big">${s.wpm}<span> wpm</span></div>
-        <div class="acc">${s.accuracy}% accuracy</div>
+        <div class="big">${verdict.score}<span> score</span></div>
+        <div class="acc">${s.wpm} wpm · ${s.accuracy}% accuracy</div>
         ${verdictBlock(verdict)}
         ${isPB ? '<div class="pb">★ new personal best</div>' : ''}
       </div>
@@ -573,7 +575,7 @@ function verdictBlock(v) {
         <i class="v-mark" style="left:${(v.position * 100).toFixed(1)}%"></i>
       </div>
       <div class="v-sub">
-        <b>${sign}${Math.abs(v.delta)} wpm</b> vs your ${v.avg} avg
+        <b>${sign}${Math.abs(v.delta)}</b> vs your ${v.avg} avg score
         · beats ${v.percentile}% of your last ${v.sample}
       </div>
     </div>`;
@@ -622,15 +624,20 @@ async function renderHistory() {
     return;
   }
 
+  // The chart plots score, not wpm, so it matches what the verdict grades.
   const last = sum.all.slice(-30);
-  const maxW = Math.max(...last.map((r) => r.wpm), 1);
+  const maxS = Math.max(...last.map(scoreOf), 1);
   const chart = last
-    .map((r) => `<div class="col" style="height:${Math.max(2, (r.wpm / maxW) * 100)}%" title="${r.wpm} wpm · ${r.accuracy}%"></div>`)
+    .map((r) => `<div class="col" style="height:${Math.max(2, (scoreOf(r) / maxS) * 100)}%" title="score ${scoreOf(r)} · ${r.wpm} wpm · ${r.accuracy}%"></div>`)
     .join('');
+  const scores = sum.all.map(scoreOf);
+  const bestScore = Math.max(...scores);
+  const avgScore = Math.round(scores.reduce((a, x) => a + x, 0) / scores.length);
   const rows = sum.recent
     .map(
       (r) => `<tr>
-        <td class="wpm">${r.wpm}</td>
+        <td class="wpm">${scoreOf(r)}</td>
+        <td>${r.wpm}</td>
         <td>${r.accuracy}%</td>
         <td><span class="tag">${r.mode}${r.difficulty && r.difficulty !== '—' ? ' · ' + r.difficulty : ''}</span></td>
         <td>${r.seconds}s</td>
@@ -645,14 +652,14 @@ async function renderHistory() {
       ${toggle}
     </div>
     <div class="cards">
-      <div class="card"><div class="k">best wpm</div><div class="v">${sum.bestWpm}</div></div>
-      <div class="card"><div class="k">avg wpm</div><div class="v small">${sum.avgWpm}</div></div>
+      <div class="card"><div class="k">best score</div><div class="v">${bestScore}</div></div>
+      <div class="card"><div class="k">avg score</div><div class="v small">${avgScore}</div></div>
+      <div class="card"><div class="k">best wpm</div><div class="v small">${sum.bestWpm}</div></div>
       <div class="card"><div class="k">avg accuracy</div><div class="v small">${sum.avgAcc}%</div></div>
-      <div class="card"><div class="k">tests</div><div class="v small">${sum.count}</div></div>
     </div>
     <div class="chart">${chart}</div>
     <table class="runs">
-      <thead><tr><th>wpm</th><th>acc</th><th>mode</th><th>time</th><th>when</th></tr></thead>
+      <thead><tr><th>score</th><th>wpm</th><th>acc</th><th>mode</th><th>time</th><th>when</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <div class="foot">

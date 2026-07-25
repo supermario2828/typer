@@ -4,7 +4,7 @@
 // per profile + machine in ~/.typer/stats.json.
 import { TypingEngine, STATUS } from '../src/core/engine.js';
 import { generate, MODES, DIFFICULTIES, LENGTHS } from '../src/core/generator.js';
-import { gradeRun } from '../src/core/verdict.js';
+import { gradeRun, scoreOf } from '../src/core/verdict.js';
 import { store } from './store.js';
 import { startKeys } from './keys.js';
 import { fetchLeaderboard } from './cloud.js';
@@ -205,10 +205,14 @@ function finishTest() {
     errors: s.incorrectChars,
     author: meta.author || null,
   };
-  const prev = store.summary(profile, categoryFilter());
-  meta._isPB = s.wpm > 0 && (prev.count === 0 || s.wpm > prev.bestWpm);
-  // Graded before the save, so a run is never part of its own baseline.
-  meta._verdict = gradeRun(s.wpm, store.runs(profile), run);
+  // Graded before the save, so a run is never part of its own baseline. The PB
+  // follows the score, so it means the same thing the headline number does.
+  const history = store.runs(profile);
+  meta._verdict = gradeRun(run, history);
+  const bestScore = Math.max(0, ...history
+    .filter((r) => r.mode === run.mode && (run.mode === 'quotes' || r.difficulty === run.difficulty))
+    .map(scoreOf));
+  meta._isPB = meta._verdict.score > 0 && meta._verdict.score > bestScore;
   store.addRun(profile, run);
 
   // Signed in + credible run → post to the global leaderboard, same gate as web.

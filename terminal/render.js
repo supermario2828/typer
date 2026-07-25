@@ -253,7 +253,13 @@ export function renderResults(s, run, isPB, verdict) {
   L.push('');
   L.push(INDENT + `${A.accent}${A.bold}⌨ TYPER${A.reset}${A.dim}  result${A.reset}`);
   L.push('');
-  L.push(INDENT + `${vc}${A.bold}${String(s.wpm).padStart(3)} wpm${A.reset}    ${A.green}${s.accuracy}% accuracy${A.reset}`);
+  if (verdict) {
+    L.push(INDENT + `${vc}${A.bold}${String(verdict.score).padStart(3)}${A.reset}${A.dim} score${A.reset}`);
+    L.push('');
+    L.push(INDENT + `${A.white}${s.wpm} wpm${A.reset}${A.dim}  ·  ${A.reset}${A.white}${s.accuracy}% accuracy${A.reset}`);
+  } else {
+    L.push(INDENT + `${A.accent}${A.bold}${String(s.wpm).padStart(3)} wpm${A.reset}    ${A.green}${s.accuracy}% accuracy${A.reset}`);
+  }
   if (isPB) L.push(INDENT + `${A.accent}★ new personal best${A.reset}`);
   if (verdict) {
     L.push('');
@@ -262,7 +268,7 @@ export function renderResults(s, run, isPB, verdict) {
     } else {
       const sign = verdict.delta > 0 ? '+' : verdict.delta < 0 ? '−' : '±';
       L.push(INDENT + `${vc}${A.bold}${verdict.label.toUpperCase()}${A.reset}`);
-      L.push(INDENT + `${verdictMeter(verdict, vc)}  ${vc}${sign}${Math.abs(verdict.delta)} wpm${A.reset}${A.dim} vs your ${verdict.avg} avg${A.reset}`);
+      L.push(INDENT + `${verdictMeter(verdict, vc)}  ${vc}${sign}${Math.abs(verdict.delta)}${A.reset}${A.dim} vs your ${verdict.avg} avg score${A.reset}`);
       L.push(INDENT + `${A.dim}beats ${verdict.percentile}% of your last ${verdict.sample}${A.reset}`);
     }
   }
