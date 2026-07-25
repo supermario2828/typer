@@ -38,13 +38,22 @@ metrics as the web app (from `src/core/`), so scoring is identical. Stats are
 stored locally per profile + machine in `~/.typer/stats.json` (Firebase auth
 doesn't fit a CLI, so the terminal is local-only).
 
+Needs **Node.js 18+**. Pick the line for your OS — each adds a global `typer`
+command you can run from anywhere:
+
 ```bash
-# Install once (needs Node.js) — adds a global `typer` command:
+# macOS / Windows (PowerShell or cmd)
 npm install -g --allow-remote=all https://github.com/supermario2828/typer/tarball/main
+
+# Linux — distro npm can't write to its own global prefix, so install into ~/.local
+npm install -g --prefix ~/.local --allow-remote=all https://github.com/supermario2828/typer/tarball/main
+```
+
+```bash
 typer                       # launch from anywhere
 typer --mode=punctuation --difficulty=hard --length=50 --profile=marius
 
-# Prefer not to install? Run it transiently:
+# Prefer not to install? This one line works on every OS — no prefix, no perms:
 npx --yes --allow-remote=all https://github.com/supermario2828/typer/tarball/main
 
 # From a checkout:
@@ -65,18 +74,21 @@ npm run cli
 > copies it properly. If reinstalling in the same shell still shows "command not
 > found", run `hash -r` or open a new terminal (zsh caches the old lookup).
 
-> **`EACCES` / permission denied on Linux?** Distro-packaged npm (Arch, some
-> Debian setups) uses a global prefix of `/usr`, which isn't writable by your
-> user — and `sudo npm i -g` there fights the system package manager. Point npm
-> at your home instead (`~/.local/bin` is usually already on `PATH`):
+> **Why Linux gets a different line.** Distro-packaged npm (Arch, some Debian
+> setups) uses a global prefix of `/usr`, which isn't writable by your user, so
+> a plain `npm i -g` dies with `EACCES: permission denied, mkdir
+> '/usr/lib/node_modules/typer'` — and `sudo npm i -g` there fights the system
+> package manager. `--prefix ~/.local` installs to `~/.local/bin` instead, which
+> is already on `PATH` on most distros. It's a per-command flag, so unlike
+> `npm config set prefix ~/.local` it won't override an existing nvm/fnm prefix.
+> If `typer` still isn't found afterwards, add `~/.local/bin` to your `PATH`.
 >
-> ```bash
-> npm config set prefix ~/.local            # once, then install as normal
-> # or per-command:
-> npm install -g --prefix ~/.local --allow-remote=all https://github.com/supermario2828/typer/tarball/main
-> ```
+> The same fix applies on macOS in the rarer case that Node was installed
+> system-wide — but `~/.local/bin` isn't on `PATH` there by default, so pick a
+> directory that is. Windows never needs it: npm installs to `%AppData%\npm`.
 
-- **Menu:** `m` mode · `d` difficulty · `l` length · `s` stats · `Enter` start · `q` quit
+- **Menu:** `m` mode · `d` difficulty · `l` length · `s` stats · `b` leaderboard ·
+  `n` name device · `u` update · `Enter` start · `q` quit
 - **During a test:** a 3-2-1 countdown, live WPM/accuracy/progress, colour-coded
   characters (correct = white, wrong = red, pending = dim, cursor = highlighted),
   word-safe wrapping to your terminal width. `Tab` restart · `Esc` menu.
@@ -87,6 +99,45 @@ npm run cli
   `p` cycles period, `t` toggles fastest/most-accurate. The CLI reads it via
   Firebase **anonymous** auth (enable it in the console — see Firebase setup);
   getting *onto* the board is done by signing in with Google on the web.
+
+### Naming a device (`n`)
+
+Scores carry the machine they were typed on, so the leaderboard can tell your
+laptop from your desktop. Unnamed machines fall back to the hostname; press `n`
+to give this one a friendly name (max 32 chars, empty to go back to the
+hostname). Non-interactively:
+
+```bash
+typer --device="Work laptop"   # set and exit — works without a TTY
+typer --device=                # clear it, back to the hostname
+```
+
+The name is saved to `~/.typer/stats.json`. When you're signed in it also syncs
+to your account (`users/{uid}/devices/{machineId}`, the same documents the web
+app writes) and is pulled back on the next sign-in, so a reinstall keeps it.
+
+> **The CLI and your browser are separate devices**, even on one machine: each
+> has its own `machineId`, so naming one doesn't rename the other. That's
+> deliberate — "Laptop (terminal)" and "Laptop (web)" are genuinely different
+> entries on the board.
+
+### Updating (`u`)
+
+The CLI is installed from a tarball, so unlike the web app it never changes
+until you reinstall it. Press `u` to check GitHub for a newer commit on `main`;
+if there is one, `u` again re-runs the install for you and exits so you can
+restart. The check also runs quietly at startup, which is what lights up the
+`★ update available` hint on the menu.
+
+The update reinstalls into **the same prefix this copy lives in** (derived from
+its own path), so an install that went to `~/.local` updates in `~/.local` and
+never trips over the `/usr` permission problem. Running via `npx` or from a
+checkout instead? The screen says so and points at `git pull` rather than
+pretending it can update you.
+
+> "Newer" = the latest commit on `main` is more recent than this copy's install
+> timestamp. No version bumps needed — but it does mean the check reports
+> *any* pushed commit, including ones that don't touch the CLI.
 
 The terminal client has **zero runtime dependencies**: the engine, generator,
 metrics and leaderboard ranking come from `src/core/`, and it talks to Firebase

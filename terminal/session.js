@@ -1,7 +1,13 @@
 // Signed-in session for the terminal, over Firebase REST (no SDK). Turns Google
 // OAuth tokens into a Firebase session so CLI runs post to the leaderboard as
 // the real account, and persists the login across runs via a refresh token.
-import { signInWithGoogle, refreshIdToken, addScore } from './firebase-rest.js';
+import {
+  signInWithGoogle,
+  refreshIdToken,
+  addScore,
+  getDeviceName,
+  setDeviceName,
+} from './firebase-rest.js';
 import { interactiveLogin } from './google-auth.js';
 import { hasAnyCreds } from './oauth-client.js';
 import { store } from './store.js';
@@ -98,6 +104,41 @@ export const session = {
       return this._idToken;
     }
     return null;
+  },
+
+  // ---- device name ------------------------------------------------------
+  // Same reconcile the web app does on sign-in (src/store/device.js):
+  //   - a name stored in the account wins (it's the cross-device source of truth)
+  //   - if the account has none but this machine is named locally, push it up
+  // Keyed by this install's machineId, so the CLI and a browser on the same box
+  // are separate entries — they each get their own name.
+  async syncDeviceName() {
+    if (!this.user) return store.device();
+    try {
+      const token = await this.getIdToken();
+      if (!token) return store.device();
+      const remote = await getDeviceName(token, this.user.uid, store.machineId());
+      if (remote) store.setDevice(remote);
+      else if (store.deviceNamed()) {
+        await setDeviceName(token, this.user.uid, store.machineId(), store.device());
+      }
+    } catch { /* offline or rules changed — the local name still works */ }
+    return store.device();
+  },
+
+  // Save a new name locally, and to the account when signed in. Returns whether
+  // the account copy was written, so the UI can be honest about what synced.
+  async setDeviceName(name) {
+    store.setDevice(name);
+    if (!this.user) return { synced: false };
+    try {
+      const token = await this.getIdToken();
+      if (!token) return { synced: false };
+      await setDeviceName(token, this.user.uid, store.machineId(), store.device());
+      return { synced: true };
+    } catch (e) {
+      return { synced: false, err: e?.message || String(e) };
+    }
   },
 
   // Publish a finished run to the global leaderboard (only when signed in).

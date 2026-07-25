@@ -305,17 +305,35 @@ kbd {
 
 /* terminal call-to-action */
 .cli-cta {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  display: flex; flex-direction: column; gap: 10px;
   margin-top: 8px; padding: 14px 16px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   font-size: 13px;
 }
+.cli-cta .cli-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cli-cta .cli-row { display: flex; align-items: center; gap: 12px; }
+.cli-cta .cli-foot {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  justify-content: space-between;
+}
 .cli-cta .cli-label { color: var(--muted); }
+.cli-cta .cli-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.cli-cta .cli-tab {
+  background: transparent; border: 1px solid transparent; border-radius: 999px;
+  padding: 3px 10px; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+}
+.cli-cta .cli-tab:hover { color: var(--text); }
+.cli-cta .cli-tab.active { background: var(--bg); border-color: var(--line); color: var(--accent); }
 .cli-cta #cliCmd {
-  flex: 1; min-width: 220px;
+  flex: 1; min-width: 0;
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   padding: 8px 12px; color: var(--accent); font-family: var(--mono); font-size: 13px;
   user-select: all; overflow-x: auto; white-space: nowrap;
+}
+.cli-cta .cli-note { color: var(--muted); font-size: 12px; }
+.cli-cta .cli-note code {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
+  padding: 1px 5px; color: var(--text); font-family: var(--mono); font-size: 11px;
 }
 .cli-cta .cli-run { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .cli-cta .cli-run code {

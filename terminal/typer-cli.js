@@ -8,6 +8,7 @@ import { store } from './store.js';
 import { startKeys } from './keys.js';
 import { fetchLeaderboard } from './cloud.js';
 import { session } from './session.js';
+import { checkForUpdate, runUpdate, updateCommand, installKind, PKG_ROOT } from './update.js';
 import * as R from './render.js';
 import os from 'node:os';
 
@@ -42,6 +43,20 @@ function parseArgs(argv) {
   return out;
 }
 
+// `--device=NAME` names this machine without going through the UI, for setup
+// scripts and headless boxes. It's saved before the TTY check so it works even
+// where the game itself can't run.
+if (args.device !== undefined) {
+  const name = store.setDevice(args.device);
+  if (store.deviceNamed()) {
+    console.log(`Device named "${name}".`);
+    console.log('Sign in (press g in the menu) to sync it to your account.');
+  } else {
+    console.log(`Device name cleared — using hostname "${name}".`);
+  }
+  process.exit(0);
+}
+
 if (!process.stdin.isTTY) {
   console.error('Typer needs an interactive terminal (TTY). Run it directly, not piped.');
   if (process.platform === 'win32') {
@@ -67,6 +82,11 @@ let boardReq = 0; // guards against out-of-order async responses
 let signin = { flow: null, url: null, userCode: null, err: null, done: false };
 let signinAbort = null; // AbortController for an in-flight login (Esc cancels)
 
+// device naming + self-update view state
+let device = { draft: '', saved: null, syncErr: null };
+let update = { phase: 'checking' };
+let updateAvailable = false; // drives the menu hint after the startup check
+
 const categoryFilter = () => ({
   mode: cfg.mode,
   ...(cfg.mode === 'quotes' ? {} : { difficulty: cfg.difficulty }),
@@ -80,7 +100,24 @@ function render() {
         signedIn: !!session.user,
         name: session.displayName(),
         hasCreds: session.hasCreds(),
+      }, {
+        name: store.device(),
+        named: store.deviceNamed(),
+        updateAvailable,
       }));
+      break;
+    case 'device':
+      R.draw(R.renderDevice({
+        draft: device.draft,
+        current: store.device(),
+        named: store.deviceNamed(),
+        signedIn: !!session.user,
+        saved: device.saved,
+        syncErr: device.syncErr,
+      }));
+      break;
+    case 'update':
+      R.draw(R.renderUpdate({ ...update, cmd: updateCommand(), root: PKG_ROOT }));
       break;
     case 'signin':
       R.draw(R.renderSignin(signin));
@@ -219,6 +256,8 @@ async function startSignIn() {
         render();
       },
     });
+    // Reconcile this machine's name with the account now that we have a uid.
+    await session.syncDeviceName();
     if (state !== 'signin') return;
     signin.done = true;
     render();
@@ -230,6 +269,99 @@ async function startSignIn() {
   } finally {
     signinAbort = null;
   }
+}
+
+// ---- device name --------------------------------------------------------
+function openDevice() {
+  stopTimers();
+  state = 'device';
+  // Pre-fill with the current name so a tweak doesn't mean retyping it; the
+  // hostname fallback starts empty, since that's a guess and not a choice.
+  device = { draft: store.deviceNamed() ? store.device() : '', saved: null, syncErr: null };
+  R.clearScreen();
+  render();
+}
+
+async function saveDevice() {
+  const res = await session.setDeviceName(device.draft);
+  if (state !== 'device') return;
+  device.saved = res;
+  device.syncErr = res.err || null;
+  render();
+  setTimeout(() => { if (state === 'device') toMenu(); }, res.synced ? 900 : 1600);
+}
+
+function deviceKey(key) {
+  if (key.name === 'escape') return toMenu();
+  if (device.saved) return; // already saved, returning to the menu — ignore keys
+  if (key.name === 'enter') return saveDevice();
+  if (key.name === 'backspace') {
+    device.draft = device.draft.slice(0, -1);
+    return render();
+  }
+  if (key.name === 'char' && device.draft.length < 32) {
+    device.draft += key.char;
+    render();
+  }
+}
+
+// ---- self-update --------------------------------------------------------
+function openUpdate() {
+  stopTimers();
+  state = 'update';
+  R.clearScreen();
+  return checkUpdate();
+}
+
+// `background` runs the same check on startup purely to light up the menu hint,
+// without stealing the screen.
+async function checkUpdate({ background = false } = {}) {
+  if (!background) { update = { phase: 'checking' }; render(); }
+  const res = await checkForUpdate();
+  updateAvailable = res.status === 'available';
+  if (background) {
+    if (state === 'menu') render();
+    return;
+  }
+  if (state !== 'update') return;
+  update = {
+    phase: res.status === 'unknown' ? 'error' : res.status,
+    kind: res.kind,
+    err: res.err,
+    sha: res.sha,
+    message: res.message,
+    commitAt: res.commitAt,
+    installedAt: res.installedAt,
+  };
+  render();
+}
+
+// Hand the terminal to npm: leave raw mode and the full-screen UI so its output
+// (and any EACCES) is plainly visible, then exit — the code running in memory is
+// the old copy, so continuing after a successful update would be a lie.
+async function applyUpdate() {
+  stopTimers();
+  stop();
+  R.showCursor();
+  R.clearScreen();
+  process.stdout.write(`${R.A.dim}${updateCommand()}${R.A.reset}\n\n`);
+  const code = await runUpdate();
+  if (code === 0) {
+    process.stdout.write(`\n${R.A.green}✓ updated — run ${R.A.reset}${R.A.accent}typer${R.A.reset}${R.A.green} again to use the new version.${R.A.reset}\n`);
+  } else if (code === -1) {
+    process.stdout.write(`\n${R.A.red}Could not run npm.${R.A.reset} ${R.A.dim}Is it on your PATH?${R.A.reset}\n`);
+  } else {
+    process.stdout.write(`\n${R.A.red}Update failed (npm exited ${code}).${R.A.reset} ${R.A.dim}The output above says why; your install is untouched.${R.A.reset}\n`);
+  }
+  process.exit(code === 0 ? 0 : 1);
+}
+
+function updateKey(key) {
+  if (key.name === 'enter' || key.name === 'escape') return toMenu();
+  if (key.name !== 'char') return;
+  if (key.char === 'r') return checkUpdate();
+  if (key.char === 'u' && update.phase === 'available') return applyUpdate();
+  if (key.char === 'q' && update.phase !== 'checking') return quit();
 }
 
 // ---- leaderboard --------------------------------------------------------
@@ -278,6 +410,8 @@ function onKey(key) {
       if (key.name === 'char' && key.char === 'q') return quit();
       return toMenu();
     case 'board': return boardKey(key);
+    case 'device': return deviceKey(key);
+    case 'update': return updateKey(key);
     case 'signin':
       if (signin.err || signin.done) {
         if (key.name === 'enter' || key.name === 'escape') return toMenu();
@@ -319,6 +453,8 @@ function menuKey(key) {
     case 'l': if (cfg.mode !== 'quotes') cfg.length = cycle(LENGTHS, cfg.length); break;
     case 's': state = 'stats'; R.clearScreen(); render(); return;
     case 'b': return openBoard();
+    case 'n': return openDevice();
+    case 'u': return openUpdate();
     case 'g':
       if (session.user) { session.signOut().then(render); render(); }
       else startSignIn();
@@ -372,4 +508,13 @@ process.on('SIGTERM', quit);
 // Silently restore a saved Google session, then show the menu.
 R.clearScreen();
 render();
-session.restore().then(() => { if (state === 'menu') render(); }).catch(() => {});
+session.restore()
+  .then(async () => {
+    if (session.user) await session.syncDeviceName();
+    if (state === 'menu') render();
+  })
+  .catch(() => {});
+
+// Quietly ask GitHub whether main has moved on, so the menu can show a hint.
+// Failures are deliberately silent — no network is not an error worth a screen.
+if (installKind() === 'global') checkUpdate({ background: true }).catch(() => {});

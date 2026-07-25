@@ -8,16 +8,62 @@ import { initAnalytics } from './firebase/config.js';
 
 // ---------------------------------------------------------------- constants
 const REPO_URL = 'https://github.com/supermario2828/typer';
-// Install the terminal version globally (needs Node.js). Afterwards the `typer`
-// command is available anywhere on that machine. Two npm quirks are baked into
-// this command:
+// Install the terminal version (needs Node.js 18+). Two npm quirks are baked
+// into every command below:
 //   1. We install from the GitHub *tarball* URL, not `github:user/repo` — the
 //      git-URL form makes npm symlink the global package to a temp clone it
 //      then deletes (dangling `typer`).
 //   2. `--allow-remote=all` is required: as of npm 12 `allow-remote` defaults
 //      to "none", so installing a tarball URL off the registry's host fails
 //      with EALLOWREMOTE. Older npm just warns about the unknown config.
-const CLI_COMMAND = 'npm install -g --allow-remote=all https://github.com/supermario2828/typer/tarball/main';
+const CLI_TARBALL = 'https://github.com/supermario2828/typer/tarball/main';
+
+// There is no one global-install string that is correct on every OS, so we show
+// the right one per platform:
+//   • Linux — distro-packaged npm (Arch, Debian) has a global prefix of `/usr`,
+//     which the user can't write to → EACCES. `--prefix ~/.local` installs into
+//     the home dir instead. It's a per-command flag, so it never clobbers an
+//     existing nvm/fnm prefix the way `npm config set prefix` would.
+//   • macOS/Windows — Homebrew, nvm and the Windows installer all use a
+//     user-writable prefix already, and `~` doesn't expand in cmd/PowerShell.
+//   • npx — the only genuinely universal line: it caches under the user's own
+//     `~/.npm`, so it can't hit a permission wall on any OS.
+const CLI_INSTALLS = {
+  linux: {
+    label: 'Linux',
+    cmd: `npm install -g --prefix ~/.local --allow-remote=all ${CLI_TARBALL}`,
+    note: 'installs to <code>~/.local/bin</code> — already on <code>PATH</code> on most distros',
+  },
+  mac: {
+    label: 'macOS',
+    cmd: `npm install -g --allow-remote=all ${CLI_TARBALL}`,
+    note: 'if you get <code>EACCES</code>, add <code>--prefix ~/.local</code> and put that on your <code>PATH</code>',
+  },
+  windows: {
+    label: 'Windows',
+    cmd: `npm install -g --allow-remote=all ${CLI_TARBALL}`,
+    note: 'PowerShell or cmd — npm installs to <code>%AppData%\\npm</code>, no admin needed',
+  },
+  npx: {
+    label: 'Any OS (no install)',
+    cmd: `npx --yes --allow-remote=all ${CLI_TARBALL}`,
+    note: 'runs it straight away and leaves nothing behind — works everywhere',
+  },
+};
+
+// Best-effort platform guess, defaulting to the universal npx line when the
+// browser won't say (userAgentData is Chromium-only; platform is legacy but
+// still the most reliable cross-browser hint).
+function detectOS() {
+  const hint = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase();
+  const ua = navigator.userAgent.toLowerCase();
+  const s = `${hint} ${ua}`;
+  if (s.includes('win')) return 'windows';
+  if (s.includes('mac') || s.includes('iphone') || s.includes('ipad')) return 'mac';
+  if (s.includes('linux') || s.includes('android') || s.includes('x11')) return 'linux';
+  return 'npx';
+}
+let cliOS = detectOS();
 
 // ---------------------------------------------------------------- app state
 const cfg = loadConfig();
@@ -108,11 +154,23 @@ function renderShell() {
     <section class="history hidden" id="board"></section>
 
     <footer class="cli-cta">
-      <span class="cli-label">▶ install the terminal version:</span>
-      <code id="cliCmd">${CLI_COMMAND}</code>
-      <button class="btn" id="copyCli">copy</button>
-      <span class="cli-run">then run <code>typer</code></span>
-      <a class="cli-src" href="${REPO_URL}" target="_blank" rel="noopener">source ↗</a>
+      <div class="cli-head">
+        <span class="cli-label">▶ install the terminal version:</span>
+        <div class="cli-tabs" id="cliTabs">
+          ${Object.entries(CLI_INSTALLS).map(([k, v]) => `
+            <button class="cli-tab" data-os="${k}">${v.label}</button>
+          `).join('')}
+        </div>
+        <a class="cli-src" href="${REPO_URL}" target="_blank" rel="noopener">source ↗</a>
+      </div>
+      <div class="cli-row">
+        <code id="cliCmd"></code>
+        <button class="btn" id="copyCli">copy</button>
+      </div>
+      <div class="cli-foot">
+        <span class="cli-note" id="cliNote"></span>
+        <span class="cli-run">needs Node 18+ · then run <code>typer</code></span>
+      </div>
     </footer>
   `;
 
@@ -133,10 +191,17 @@ function renderShell() {
   el.overlay.onclick = startCountdown;
   el.text.onclick = startCountdown;
 
+  el.cliCmd = document.getElementById('cliCmd');
+  el.cliNote = document.getElementById('cliNote');
+  document.querySelectorAll('.cli-tab').forEach((tab) => {
+    tab.onclick = () => { cliOS = tab.dataset.os; renderCliCmd(); };
+  });
+  renderCliCmd();
+
   const copyBtn = document.getElementById('copyCli');
   copyBtn.onclick = async () => {
     try {
-      await navigator.clipboard.writeText(CLI_COMMAND);
+      await navigator.clipboard.writeText(CLI_INSTALLS[cliOS].cmd);
       copyBtn.textContent = 'copied ✓';
       setTimeout(() => { copyBtn.textContent = 'copy'; }, 1500);
     } catch {
@@ -152,6 +217,16 @@ function renderShell() {
   renderAuthArea();
   renderDeviceBar();
   renderConfig();
+}
+
+// ---------------------------------------------------------------- cli install
+function renderCliCmd() {
+  const install = CLI_INSTALLS[cliOS];
+  el.cliCmd.textContent = install.cmd;
+  el.cliNote.innerHTML = install.note;
+  document.querySelectorAll('.cli-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.os === cliOS);
+  });
 }
 
 // ---------------------------------------------------------------- device bar

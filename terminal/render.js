@@ -93,7 +93,7 @@ function title(cfg) {
 
 // ---- frames -------------------------------------------------------------
 
-export function renderMenu(cfg, best, auth = {}) {
+export function renderMenu(cfg, best, auth = {}, dev = {}) {
   const seg = (items, cur) => items
     .map((v) => (v === cur ? `${A.accent}[${v}]${A.reset}` : `${A.dim} ${v} ${A.reset}`))
     .join(' ');
@@ -108,6 +108,8 @@ export function renderMenu(cfg, best, auth = {}) {
   } else {
     L.push(INDENT + `${A.dim}○ not signed in (Google sign-in not configured — see README)${A.reset}`);
   }
+  L.push(INDENT + `${A.dim}on ${A.reset}${dev.named ? A.white : A.dim}${dev.name || '—'}${A.reset}${A.dim}${dev.named ? '' : ' (unnamed)'} — press ${A.reset}${A.white}n${A.reset}${A.dim} to rename${A.reset}`
+    + (dev.updateAvailable ? `   ${A.accent}★ update available (${A.reset}${A.white}u${A.reset}${A.accent})${A.reset}` : ''));
   L.push('');
   L.push(INDENT + `${A.gray}mode        ${A.reset}${seg(modeKeys, cfg.mode)}`);
   const dimDiff = cfg.mode === 'quotes';
@@ -119,7 +121,75 @@ export function renderMenu(cfg, best, auth = {}) {
     L.push('');
   }
   L.push(INDENT + `${A.dim}keys:${A.reset} ${A.white}m${A.reset} mode   ${A.white}d${A.reset} difficulty   ${A.white}l${A.reset} length   ${A.white}s${A.reset} stats   ${A.white}b${A.reset} leaderboard`);
-  L.push(INDENT + `      ${A.accent}⏎ Enter${A.reset} start    ${A.white}q${A.reset} quit`);
+  L.push(INDENT + `      ${A.white}n${A.reset} name device   ${A.white}u${A.reset} update   ${A.accent}⏎ Enter${A.reset} start    ${A.white}q${A.reset} quit`);
+  L.push('');
+  return L.join('\n') + '\n';
+}
+
+export function renderDevice(opts) {
+  const { draft, current, named, signedIn, saved, syncErr } = opts;
+  const L = [];
+  L.push('');
+  L.push(INDENT + `${A.accent}${A.bold}⌨ TYPER${A.reset}${A.dim}  name this device${A.reset}`);
+  L.push('');
+  L.push(INDENT + `${A.dim}Shown next to your scores on the global leaderboard, so you can tell${A.reset}`);
+  L.push(INDENT + `${A.dim}your machines apart. ${A.reset}${A.gray}currently:${A.reset} ${A.white}${current}${A.reset}${named ? '' : `${A.dim} (hostname — not named yet)${A.reset}`}`);
+  L.push('');
+  L.push(INDENT + `${A.gray}name  ${A.reset}${A.accent}${draft}${A.reset}${A.inverse} ${A.reset}`);
+  L.push('');
+  if (saved) {
+    L.push(INDENT + (saved.synced
+      ? `${A.green}✓ saved and synced to your account${A.reset}`
+      : `${A.green}✓ saved on this machine${A.reset}${A.dim}${signedIn ? " — couldn't reach your account" : ' (sign in to sync it to your account)'}${A.reset}`));
+    if (syncErr) L.push(INDENT + `${A.dim}${syncErr}${A.reset}`);
+  } else if (!signedIn) {
+    L.push(INDENT + `${A.dim}not signed in — the name stays on this machine until you sign in.${A.reset}`);
+  }
+  L.push('');
+  L.push(INDENT + `${A.accent}⏎ Enter${A.reset} save   ${A.white}Esc${A.reset} cancel   ${A.dim}(empty name = back to the hostname)${A.reset}`);
+  L.push('');
+  return L.join('\n') + '\n';
+}
+
+export function renderUpdate(u) {
+  const L = [];
+  L.push('');
+  L.push(INDENT + `${A.accent}${A.bold}⌨ TYPER${A.reset}${A.dim}  update${A.reset}`);
+  L.push('');
+
+  if (u.phase === 'checking') {
+    L.push(INDENT + `${A.dim}checking GitHub for a newer version…${A.reset}`);
+  } else if (u.phase === 'error') {
+    L.push(INDENT + `${A.red}couldn't check for updates${A.reset}`);
+    L.push(INDENT + `${A.dim}${u.err}${A.reset}`);
+  } else if (u.kind === 'npx') {
+    L.push(INDENT + `${A.white}You're running via npx.${A.reset}`);
+    L.push(INDENT + `${A.dim}npx fetches the latest main every time, so there's nothing to update.${A.reset}`);
+  } else if (u.kind === 'checkout') {
+    L.push(INDENT + `${A.white}You're running from a git checkout.${A.reset}`);
+    L.push(INDENT + `${A.dim}Update it with ${A.reset}${A.accent}git pull${A.reset}${A.dim} in ${u.root}${A.reset}`);
+  } else if (u.phase === 'current') {
+    L.push(INDENT + `${A.green}✓ up to date${A.reset}${A.dim}  — you have the latest commit on main (${u.sha})${A.reset}`);
+    if (u.message) L.push(INDENT + `${A.dim}${trunc(u.message, 62)}${A.reset}`);
+  } else if (u.phase === 'available') {
+    L.push(INDENT + `${A.accent}${A.bold}★ an update is available${A.reset}`);
+    L.push('');
+    L.push(INDENT + `${A.gray}${pad('latest', 12)}${A.reset}${A.white}${u.sha}${A.reset}${A.dim}  ${trunc(u.message || '', 48)}${A.reset}`);
+    L.push(INDENT + `${A.gray}${pad('pushed', 12)}${A.reset}${A.dim}${timeAgo(u.commitAt)}${A.reset}`);
+    L.push(INDENT + `${A.gray}${pad('installed', 12)}${A.reset}${A.dim}${timeAgo(u.installedAt)}${A.reset}`);
+    L.push('');
+    L.push(INDENT + `${A.dim}will run:${A.reset}`);
+    L.push(INDENT + `${A.accent}${u.cmd}${A.reset}`);
+  }
+
+  L.push('');
+  if (u.phase === 'available') {
+    L.push(INDENT + `${A.accent}u${A.reset} update now   ${A.white}r${A.reset} re-check   ${A.accent}⏎${A.reset}/${A.white}Esc${A.reset} menu`);
+  } else if (u.phase === 'checking') {
+    L.push(INDENT + `${A.white}Esc${A.reset}${A.dim} menu${A.reset}`);
+  } else {
+    L.push(INDENT + `${A.white}r${A.reset} re-check   ${A.accent}⏎${A.reset}/${A.white}Esc${A.reset} menu   ${A.white}q${A.reset} quit`);
+  }
   L.push('');
   return L.join('\n') + '\n';
 }

@@ -13,10 +13,11 @@ const IDENTITY = 'https://identitytoolkit.googleapis.com/v1';
 const SECURE = 'https://securetoken.googleapis.com/v1';
 const FS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
 
-async function postJson(url, body, token) {
-  const headers = { 'Content-Type': 'application/json' };
+async function send(method, url, body, token) {
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
-  const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
   if (!r.ok) {
     let msg = `HTTP ${r.status}`;
     try { msg = (await r.json())?.error?.message || msg; } catch { /* keep status */ }
@@ -25,6 +26,10 @@ async function postJson(url, body, token) {
     throw e;
   }
   return r.json();
+}
+
+function postJson(url, body, token) {
+  return send('POST', url, body, token);
 }
 
 // ---- auth ---------------------------------------------------------------
@@ -114,4 +119,23 @@ export async function getScores(idToken, sinceMs = 0, limit = 1000) {
 
 export async function addScore(idToken, data) {
   return postJson(`${FS}/scores`, encodeFields(data), idToken);
+}
+
+// ---- Firestore: device names -------------------------------------------
+// users/{uid}/devices/{machineId} = { name, updatedAt } — the same documents
+// the web app writes, so a name set in one place is visible in the other.
+export async function getDeviceName(idToken, uid, machineId) {
+  const url = `${FS}/users/${uid}/devices/${encodeURIComponent(machineId)}`;
+  try {
+    const doc = await send('GET', url, null, idToken);
+    return decodeDoc(doc).name || null;
+  } catch (e) {
+    if (e.status === 404) return null; // never named on this machine
+    throw e;
+  }
+}
+
+export async function setDeviceName(idToken, uid, machineId, name) {
+  const url = `${FS}/users/${uid}/devices/${encodeURIComponent(machineId)}`;
+  return send('PATCH', url, encodeFields({ name, updatedAt: Date.now() }), idToken);
 }

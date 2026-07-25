@@ -24,10 +24,26 @@ function write(data) {
 export const store = {
   file: FILE,
 
+  // The label shown on the leaderboard and in stats. A name the user chose wins;
+  // otherwise fall back to the machine's hostname (never persisted, so a later
+  // rename of the box is picked up automatically).
   device() {
     const d = read();
-    if (!d.device) { d.device = os.hostname(); write(d); }
-    return d.device;
+    return d.device || os.hostname();
+  },
+
+  // Whether the user actually named this machine, vs. us guessing the hostname.
+  deviceNamed() {
+    return !!read().deviceNamed;
+  },
+
+  setDevice(name) {
+    const d = read();
+    const clean = String(name).trim().slice(0, 32);
+    if (clean) { d.device = clean; d.deviceNamed = true; }
+    else { delete d.device; delete d.deviceNamed; }
+    write(d);
+    return this.device();
   },
 
   machineId() {
