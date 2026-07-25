@@ -37,12 +37,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
 
-// Replace the placeholders with the real values, then commit this file.
+// Desktop-app client for project `digi-typer`. Drives the loopback flow on any
+// machine that has a browser — macOS, Windows, Linux, WSL.
 const DESKTOP = {
-  clientId: '',      // e.g. '708032044767-xxxxxxxx.apps.googleusercontent.com'
-  clientSecret: '',  // e.g. 'GOCSPX-xxxxxxxxxxxxxxxx'
+  clientId: '708032044767-b5n4ug45l0p4v85u6djoad01ldk6g93p.apps.googleusercontent.com',
+  clientSecret: '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',
 };
 
+// Not configured yet. Google only honours the device-code grant for clients of
+// type "TVs and Limited Input devices" — the desktop id above is rejected with
+// invalid_client, so it can't be reused here. Until this is filled in, headless
+// machines fall back to the printed loopback URL (see interactiveLogin).
 const DEVICE = {
   clientId: '',
   clientSecret: '',  // TV/limited-input clients issue one; send it if present.
