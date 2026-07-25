@@ -411,9 +411,57 @@ kbd {
 .card .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .card .v { font-size: 28px; color: var(--accent); margin-top: 4px; }
 .card .v.small { font-size: 20px; color: var(--text); }
-.chart { display: flex; align-items: flex-end; gap: 3px; height: 70px; margin-bottom: 18px; }
-.chart .col { flex: 1; background: var(--accent-dim); border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s; }
-.chart .col:hover { background: var(--accent); }
+/* ---------- score sparkline ---------- */
+/* A line, not bars. The y-axis is truncated (see scoreChart in main.js) and a
+   bar's length is its value, so truncating bars would misstate every one of
+   them; a line encodes position, which survives a floating baseline. */
+/* The right gutter keeps the axis labels off the end of the line. */
+.chart { position: relative; height: 70px; margin: 4px 0 6px; padding-right: 26px; }
+.spark { display: block; width: 100%; height: 100%; overflow: visible; }
+.spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+/* Your average, as a hairline to read the run against — one shade off the
+   surface so it stays behind the data. */
+.spark-avg { stroke: var(--faint); stroke-width: 1; }
+
+/* Matches the plot box, not the padding box, so dots land on the line. */
+.spark-dots { position: absolute; top: 0; bottom: 0; left: 0; right: 26px; }
+.spark-dots i {
+  position: absolute;
+  width: 7px; height: 7px;
+  margin: 0 0 -3.5px -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+/* A 25px hit area around a 7px dot — the mark is small, the target isn't. */
+.spark-dots i::after { content: ''; position: absolute; inset: -9px; }
+.spark-dots i:hover { opacity: 1; }
+
+.chart .ax {
+  position: absolute; right: 0;
+  padding: 0 2px;
+  background: var(--surface);
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1;
+}
+.chart .ax.hi { top: -3px; }
+.chart .ax.lo { bottom: -3px; }
+
+.chart-cap { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
+.chart-cap b { color: var(--text); font-weight: 400; }
+/* The truncated axis is stated, not hidden — it's the one thing about this
+   chart a reader could otherwise misjudge. */
+.chart-cap .warn { color: var(--faint); }
+.chart-cap .warn::before { content: '· '; }
 .runs { width: 100%; border-collapse: collapse; font-size: 13px; }
 .runs th { text-align: left; color: var(--muted); font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 6px 8px; }
 .runs td { padding: 7px 8px; border-top: 1px solid var(--line); }

@@ -624,15 +624,11 @@ async function renderHistory() {
     return;
   }
 
-  // The chart plots score, not wpm, so it matches what the verdict grades.
-  const last = sum.all.slice(-30);
-  const maxS = Math.max(...last.map(scoreOf), 1);
-  const chart = last
-    .map((r) => `<div class="col" style="height:${Math.max(2, (scoreOf(r) / maxS) * 100)}%" title="score ${scoreOf(r)} · ${r.wpm} wpm · ${r.accuracy}%"></div>`)
-    .join('');
   const scores = sum.all.map(scoreOf);
   const bestScore = Math.max(...scores);
   const avgScore = Math.round(scores.reduce((a, x) => a + x, 0) / scores.length);
+  // Plots score, not wpm, so the chart matches what the verdict grades.
+  const chart = scoreChart(sum.all.slice(-30), avgScore);
   const rows = sum.recent
     .map(
       (r) => `<tr>
@@ -657,7 +653,7 @@ async function renderHistory() {
       <div class="card"><div class="k">best wpm</div><div class="v small">${sum.bestWpm}</div></div>
       <div class="card"><div class="k">avg accuracy</div><div class="v small">${sum.avgAcc}%</div></div>
     </div>
-    <div class="chart">${chart}</div>
+    ${chart}
     <table class="runs">
       <thead><tr><th>score</th><th>wpm</th><th>acc</th><th>mode</th><th>time</th><th>when</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -668,6 +664,52 @@ async function renderHistory() {
     </div>
   `;
   wireHistControls();
+}
+
+// Score over the last N runs.
+//
+// This is a line rather than the bars it used to be, because the y-axis has to
+// be truncated to be useful: scores live in a narrow band well above zero, so
+// anchoring at zero flattens a real 30 → 53 climb into a barely-visible wobble.
+// Bars can't be truncated honestly — a bar's *length* is its value, so a 30
+// beside a 53 on a floating baseline reads as a third of it rather than a bit
+// over half. A line encodes value as position, where a non-zero baseline is
+// legitimate as long as it's labelled — hence the axis ends and the caption.
+function scoreChart(runs, avgScore) {
+  const pts = runs.map(scoreOf);
+  if (pts.length < 2) return ''; // two points is the minimum that can show a trend
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  // Headroom so the extremes don't sit welded to the edges.
+  const pad = Math.max(2, (max - min) * 0.15);
+  const lo = min - pad;
+  const hi = max + pad;
+  const W = 300;
+  const H = 70;
+  const fx = (i) => (i / (pts.length - 1)) * W;
+  const fy = (v) => H - ((v - lo) / (hi - lo)) * H;
+  const line = pts.map((v, i) => `${i ? 'L' : 'M'}${fx(i).toFixed(1)} ${fy(v).toFixed(1)}`).join(' ');
+  const avgY = fy(Math.min(hi, Math.max(lo, avgScore)));
+  const dots = runs.map((r, i) => {
+    const v = scoreOf(r);
+    return `<i style="left:${((i / (pts.length - 1)) * 100).toFixed(2)}%;bottom:${(((v - lo) / (hi - lo)) * 100).toFixed(2)}%"
+      title="score ${v} · ${r.wpm} wpm · ${r.accuracy}% · ${timeAgo(r.at)}"></i>`;
+  }).join('');
+
+  return `
+    <div class="chart">
+      <svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <line class="spark-avg" x1="0" y1="${avgY.toFixed(1)}" x2="${W}" y2="${avgY.toFixed(1)}" vector-effect="non-scaling-stroke" />
+        <path class="spark-line" d="${line}" vector-effect="non-scaling-stroke" />
+      </svg>
+      <div class="spark-dots">${dots}</div>
+      <span class="ax hi">${Math.round(hi)}</span>
+      <span class="ax lo">${Math.round(lo)}</span>
+    </div>
+    <div class="chart-cap">
+      score, last ${pts.length} runs · ${min === max ? min : `${min}–${max}`} · <b>avg ${avgScore}</b>
+      <span class="warn">scale starts at ${Math.round(lo)}, not zero</span>
+    </div>`;
 }
 
 function wireHistControls() {
