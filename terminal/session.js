@@ -2,7 +2,8 @@
 // OAuth tokens into a Firebase session so CLI runs post to the leaderboard as
 // the real account, and persists the login across runs via a refresh token.
 import { signInWithGoogle, refreshIdToken, addScore } from './firebase-rest.js';
-import { interactiveLogin, loadCreds } from './google-auth.js';
+import { interactiveLogin } from './google-auth.js';
+import { hasAnyCreds } from './oauth-client.js';
 import { store } from './store.js';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +29,7 @@ export const session = {
   _ts: 0,
 
   hasCreds() {
-    return !!loadCreds();
+    return hasAnyCreds();
   },
 
   displayName() {
@@ -60,9 +61,19 @@ export const session = {
     }
   },
 
-  // Interactive browser login. onUrl(url) receives the consent URL.
-  async signIn(onUrl) {
-    const google = await interactiveLogin(onUrl);
+  /**
+   * Interactive login. The flow (browser loopback vs. device code) is chosen to
+   * suit the machine — see google-auth.js.
+   *
+   * @param {object} [opts]
+   * @param {'auto'|'browser'|'device'} [opts.mode]
+   * @param {number} [opts.port] fixed loopback port, for `ssh -L`.
+   * @param {(info:object)=>void} [opts.onProgress] consent URL / user code.
+   * @param {AbortSignal} [opts.signal] cancel the attempt.
+   */
+  async signIn(opts = {}) {
+    const google = await interactiveLogin(opts);
+    if (!google.id_token) throw new Error('Google returned no id_token — check the OAuth client scopes');
     const fbUser = await signInWithGoogle(google.id_token);
     this._set(fbUser);
     writeAuth({ refresh_token: fbUser.refreshToken, uid: fbUser.uid, name: fbUser.name, photo: fbUser.photo });

@@ -170,27 +170,48 @@ export function renderResults(s, run, isPB) {
 }
 
 export function renderSignin(opts) {
-  const { url, err, done } = opts;
+  const { flow, url, userCode, verifyUrl, opened, switched, err, done } = opts;
   const L = [];
   L.push('');
   L.push(INDENT + `${A.accent}${A.bold}⌨ TYPER${A.reset}${A.dim}  sign in with Google${A.reset}`);
   L.push('');
+
   if (err) {
     L.push(INDENT + `${A.red}sign-in failed:${A.reset} ${A.dim}${err}${A.reset}`);
     L.push('');
     L.push(INDENT + `${A.accent}⏎${A.reset}/${A.white}Esc${A.reset} back to menu`);
   } else if (done) {
     L.push(INDENT + `${A.green}✓ signed in!${A.reset}`);
-  } else {
-    L.push(INDENT + `${A.white}A browser window should have opened.${A.reset} ${A.dim}Approve access to continue.${A.reset}`);
+  } else if (flow === 'device') {
+    // No browser here (headless box, SSH, container): the user approves on any
+    // other device by typing a short code.
+    L.push(INDENT + `${A.dim}No browser on this machine — approve from your phone or another computer.${A.reset}`);
     L.push('');
-    L.push(INDENT + `${A.dim}If it didn't open, paste this URL into your browser:${A.reset}`);
+    L.push(INDENT + `${A.white}1.${A.reset} go to ${A.accent}${verifyUrl || 'https://www.google.com/device'}${A.reset}`);
+    L.push(INDENT + `${A.white}2.${A.reset} enter this code:`);
+    L.push('');
+    L.push(INDENT + `   ${A.accent}${A.bold}${spaced(userCode)}${A.reset}`);
+    L.push('');
+    L.push(INDENT + `${A.dim}waiting for approval…  (${A.reset}${A.white}Esc${A.reset}${A.dim} to cancel)${A.reset}`);
+  } else {
+    if (switched) L.push(INDENT + `${A.dim}couldn't open a browser — switching to code sign-in…${A.reset}`);
+    L.push(INDENT + (opened === false
+      ? `${A.white}Couldn't open a browser automatically.${A.reset} ${A.dim}Open this URL yourself:${A.reset}`
+      : `${A.white}A browser window should have opened.${A.reset} ${A.dim}Approve access to continue.${A.reset}`));
+    L.push('');
+    if (opened !== false) L.push(INDENT + `${A.dim}If it didn't open, paste this URL into your browser:${A.reset}`);
     L.push(INDENT + `${A.accent}${url || '…'}${A.reset}`);
     L.push('');
-    L.push(INDENT + `${A.dim}waiting for you to finish in the browser…  (${A.reset}${A.white}Ctrl-C${A.reset}${A.dim} to cancel)${A.reset}`);
+    L.push(INDENT + `${A.dim}waiting for you to finish in the browser…  (${A.reset}${A.white}Esc${A.reset}${A.dim} to cancel)${A.reset}`);
   }
   L.push('');
   return L.join('\n') + '\n';
+}
+
+// "ABCD-EFGH" -> "A B C D - E F G H": device codes get read off one screen and
+// typed into another, and the extra tracking makes that much less error-prone.
+function spaced(code) {
+  return (code || '…').split('').join(' ');
 }
 
 export function renderLeaderboard(cfg, opts) {

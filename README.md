@@ -102,36 +102,94 @@ cross-platform browser launching (`open` / `xdg-open` / `cmd start`).
 - **Windows:** run it in **Windows Terminal, PowerShell, or cmd**. Git Bash /
   MinTTY don't provide a real TTY for raw input — if you must use them, prefix
   with `winpty typer`.
-- **Linux:** any standard terminal. Google sign-in's browser launch uses
-  `xdg-open` (present on desktop installs; on a headless box, copy the URL the
-  CLI prints instead).
+- **Linux:** any standard terminal. Google sign-in tries a long list of browser
+  openers, and on a headless box (no `$DISPLAY`/`$WAYLAND_DISPLAY`) it switches
+  to the device-code flow automatically — see *CLI Google sign-in* below.
+- **WSL:** sign-in hands the URL to the Windows browser (`wslview`, else
+  PowerShell `Start-Process`); WSL2's default localhost forwarding lets the
+  redirect reach the loopback server. If it doesn't, use `--auth=device`.
 
-### CLI Google sign-in (optional — to post CLI runs to the leaderboard)
+### CLI Google sign-in
 
 By default the terminal reads the leaderboard anonymously. Sign in with Google
 (`g` from the menu) to make your terminal runs **count on the leaderboard** as
-your account. It uses the OAuth loopback flow: the CLI opens your browser, you
-approve, and a refresh token is saved to `~/.typer/auth.json` (mode 600) so you
-stay signed in. Your password is never seen by the CLI.
+your account. Your password is never seen by the CLI, and a refresh token is
+saved to `~/.typer/auth.json` (mode 600) so you stay signed in.
 
-This needs a **Google OAuth "Desktop app" client** (the web client can't do the
-loopback redirect). One-time setup:
+Because a CLI runs everywhere, there are **two flows** and it picks for you:
+
+| Flow | When | How it works |
+|------|------|--------------|
+| **Loopback** | there's a browser (normal desktop, WSL) | opens your browser to Google's consent screen and catches the redirect on a throwaway `127.0.0.1` server (PKCE, random port) |
+| **Device code** | headless box, SSH, container, no `$DISPLAY` | shows a short code + URL; you approve on your phone, the CLI polls Google |
+
+`auto` uses the browser when the machine can plausibly show one, and falls back
+to the device flow if no opener works. Override with flags:
+
+```bash
+typer --auth=device        # force the code flow even on a desktop
+typer --auth=browser       # force the loopback flow
+typer --auth-port=45123    # pin the loopback port (see SSH, below)
+```
+
+`Esc` cancels a sign-in in progress.
+
+**Browser launching** tries, in order: `$BROWSER`, then the platform opener
+(`open` on macOS; `start` then `rundll32` on Windows; `wslview` /
+`powershell.exe` under WSL; `termux-open-url` on Termux), then `xdg-open`,
+`gio`, `gnome-open`, `kde-open`, `x-www-browser`, `sensible-browser`, and
+finally Firefox/Chrome/Chromium directly — and it *detects* failure (a missing
+binary, or `xdg-open` exiting 3 with no handler) instead of silently assuming a
+window appeared. See [`terminal/open-url.js`](terminal/open-url.js).
+
+**Over SSH** you have two options. Easiest: `typer --auth=device` and approve on
+your phone — nothing needs to reach the remote machine. Or forward a pinned
+port, so the redirect lands back on your laptop's browser:
+
+```bash
+ssh -L 45123:127.0.0.1:45123 you@host
+typer --auth=browser --auth-port=45123
+```
+
+#### Maintainer setup (once, before publishing)
+
+The OAuth client id/secret ship **in the package** —
+[`terminal/oauth-client.js`](terminal/oauth-client.js) — which is how every
+distributed CLI that does Google sign-in works (gcloud, `gh`, rclone). Google's
+own guidance for installed apps is explicit that in this context "the client
+secret is obviously not treated as a secret"; the account is protected by the
+consent screen and PKCE, not by hiding those strings. Users can still override
+with their own client via `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (and
+`GOOGLE_DEVICE_CLIENT_ID` / `_SECRET`), or `~/.typer/oauth.json`:
+
+```json
+{
+  "desktop": { "client_id": "…", "client_secret": "…" },
+  "device":  { "client_id": "…", "client_secret": "…" }
+}
+```
+
+To make sign-in work for the public, fill in `terminal/oauth-client.js` and
+commit it:
 
 1. [Google Cloud console](https://console.cloud.google.com/apis/credentials) →
-   project **digi-typer** → **Create Credentials → OAuth client ID → Desktop app**.
-2. Provide the client id + secret to the CLI, either via env vars:
-   ```bash
-   export GOOGLE_CLIENT_ID="....apps.googleusercontent.com"
-   export GOOGLE_CLIENT_SECRET="..."
-   ```
-   or `~/.typer/oauth.json`:
-   ```json
-   { "client_id": "....apps.googleusercontent.com", "client_secret": "..." }
-   ```
+   project **digi-typer** → **Create Credentials → OAuth client ID → Desktop
+   app** → paste into `DESKTOP`. (The *web* client can't do loopback redirects.)
+2. Same again with **TVs and Limited Input devices** → paste into `DEVICE`.
+   This one is what makes SSH/headless sign-in possible.
+3. **OAuth consent screen** → add scopes `openid`, `email`, `profile`, then
+   **publish** the app. Left in "Testing", only accounts you list by hand can
+   sign in — which will look like a broken CLI to everyone else.
+4. **Firebase console → Authentication → Sign-in method → Google** → confirm
+   both client IDs are accepted. Clients in the same Google Cloud project are
+   normally fine automatically; if `accounts:signInWithIdp` returns an audience
+   error, add them under *"Whitelist client IDs from external projects"*.
 
-For installed apps Google does not treat the client secret as confidential, but
-this keeps it out of the public repo. If it isn't configured, the CLI simply
-stays in read-only (anonymous) leaderboard mode.
+Until steps 1–2 are done the menu shows *"Google sign-in not configured"* and
+the CLI stays in read-only (anonymous) leaderboard mode — nothing else breaks.
+
+> Setting the env vars in **fish** uses `set`, not `export`:
+> `set -Ux GOOGLE_CLIENT_ID "…"`. In PowerShell: `$env:GOOGLE_CLIENT_ID = "…"`.
 
 ## Firebase (Google sign-in + cloud stats)
 
@@ -209,10 +267,16 @@ src/
   main.js      web UI (wires the engine to the DOM)
   style.css
 terminal/      <- the CLI client (Node, zero deps)
-  typer-cli.js   state machine / orchestrator
-  render.js      ANSI frames + word-safe wrapping
-  keys.js        raw stdin -> logical key events
-  store.js       ~/.typer/stats.json persistence
+  typer-cli.js     state machine / orchestrator
+  render.js        ANSI frames + word-safe wrapping
+  keys.js          raw stdin -> logical key events
+  store.js         ~/.typer/stats.json persistence
+  google-auth.js   OAuth: loopback + device-code flows
+  oauth-client.js  shipped OAuth client ids (+ user overrides)
+  open-url.js      cross-platform browser launching
+  session.js       Google token -> Firebase session, persisted
+  firebase-rest.js Identity Toolkit + Firestore over plain REST
+  cloud.js         leaderboard fetch
 ```
 
 Two seams were designed in from the start:

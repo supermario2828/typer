@@ -24,6 +24,15 @@ const cfg = {
   length: LENGTHS.includes(Number(args.length)) ? Number(args.length) : 25,
 };
 
+// Sign-in transport. `auto` picks the browser loopback flow when this machine
+// can actually show a browser and the device-code flow otherwise; the flags are
+// escape hatches for when that guess is wrong.
+//   --auth=browser|device|auto
+//   --auth-port=N   pin the loopback port, so `ssh -L N:127.0.0.1:N host` lets
+//                   a remote login redirect back to the browser on your laptop.
+const authMode = ['auto', 'browser', 'device'].includes(args.auth) ? args.auth : 'auto';
+const authPort = Number.isInteger(Number(args['auth-port'])) ? Number(args['auth-port']) : 0;
+
 function parseArgs(argv) {
   const out = {};
   for (const a of argv) {
@@ -55,7 +64,8 @@ let boardPeriod = 'all';
 let boardMetric = 'wpm';
 let board = { loading: false, err: null, rows: [] };
 let boardReq = 0; // guards against out-of-order async responses
-let signin = { url: null, err: null, done: false };
+let signin = { flow: null, url: null, userCode: null, err: null, done: false };
+let signinAbort = null; // AbortController for an in-flight login (Esc cancels)
 
 const categoryFilter = () => ({
   mode: cfg.mode,
@@ -177,24 +187,48 @@ function stopTimers() {
 }
 
 // ---- google sign-in -----------------------------------------------------
+// Human-readable endings for the AuthError codes google-auth.js raises. Anything
+// not listed falls through to the raw message.
+const SIGNIN_ERRORS = {
+  'no-oauth-creds': 'Google sign-in is not configured in this build (see README: CLI Google sign-in).',
+  'no-device-creds': 'The device-code flow is not configured in this build (see README: CLI Google sign-in).',
+  denied: 'You declined the permission request.',
+  timeout: 'Timed out waiting for approval.',
+  cancelled: 'Cancelled.',
+  network: 'Could not reach Google. Check your connection or proxy, then try again.',
+  'port-in-use': 'That --auth-port is already in use. Pick another, or drop the flag to use any free port.',
+  'no-browser': 'No browser could be opened, and no fallback flow is configured. Open the URL above by hand.',
+};
+
 async function startSignIn() {
   stopTimers();
+  signinAbort = new AbortController();
   state = 'signin';
-  signin = { url: null, err: null, done: false };
+  signin = { flow: null, url: null, userCode: null, verifyUrl: null, opened: null, err: null, done: false };
   R.clearScreen();
   render();
   try {
-    await session.signIn((url) => { signin.url = url; if (state === 'signin') render(); });
+    await session.signIn({
+      mode: authMode,
+      port: authPort,
+      signal: signinAbort.signal,
+      onProgress: (info) => {
+        if (state !== 'signin') return;
+        if (info.flow === 'switching') signin.switched = true;
+        else Object.assign(signin, info);
+        render();
+      },
+    });
     if (state !== 'signin') return;
     signin.done = true;
     render();
     setTimeout(() => { if (state === 'signin') toMenu(); }, 900);
   } catch (e) {
     if (state !== 'signin') return;
-    signin.err = e?.message === 'no-oauth-creds'
-      ? 'Google sign-in is not configured on this machine (see README: CLI Google sign-in).'
-      : (e?.message || String(e));
+    signin.err = SIGNIN_ERRORS[e?.code] || e?.message || String(e);
     render();
+  } finally {
+    signinAbort = null;
   }
 }
 
@@ -245,10 +279,16 @@ function onKey(key) {
       return toMenu();
     case 'board': return boardKey(key);
     case 'signin':
-      // Only allow leaving once the flow settled (success/error); ignore keys
-      // while still waiting on the browser.
       if (signin.err || signin.done) {
         if (key.name === 'enter' || key.name === 'escape') return toMenu();
+        return;
+      }
+      // Still waiting on the browser / phone: Esc aborts the attempt so the
+      // user isn't stuck staring at a flow they can't complete (the device flow
+      // polls for minutes) with only Ctrl-C as a way out.
+      if (key.name === 'escape') {
+        signinAbort?.abort();
+        return toMenu();
       }
       return;
   }
